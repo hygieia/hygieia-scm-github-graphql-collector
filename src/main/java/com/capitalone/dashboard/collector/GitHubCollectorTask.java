@@ -25,10 +25,12 @@ import org.apache.commons.logging.LogFactory;
 import org.bson.types.ObjectId;
 import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 
 import java.net.MalformedURLException;
@@ -165,7 +167,8 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         clean(collector);
         List<GitHubRepo> enabledRepos = enabledRepos(collector);
         for (GitHubRepo repo : enabledRepos) {
-            LOG.info("Starting collection: " + (repoCount + 1) + " of " + enabledRepos.size() + ": " + repo.getRepoUrl() + "/tree/" + repo.getBranch());
+            repoCount++;
+            LOG.info("Starting collection: " + repoCount + " of " + enabledRepos.size() + ": " + repo.getRepoUrl() + "/tree/" + repo.getBranch());
 
             boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
 
@@ -173,7 +176,9 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
                 try {
                     if (gitHubSettings.isCheckRateLimit() &&  !isUnderRateLimit(repo)) {
-                        LOG.error("GraphQL API rate limit reached. Stopping processing");
+                        LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis()-start)/1000 + " seconds since start. Stopping processing");
+                        // add 0.2 second delay
+                        sleep(200);
                         continue;
                     }
 
@@ -214,6 +219,10 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 } catch (HttpStatusCodeException hc) {
                     LOG.error("Error fetching commits for:" + repo.getRepoUrl(), hc);
                     CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
+                    if (hc.getStatusCode()==HttpStatus.UNAUTHORIZED || hc.getStatusCode()==HttpStatus.FORBIDDEN) {
+                        LOG.info("add 0.2 sec delay when received 401/403 from GitHub");
+                        sleep(200);
+                    }
                     repo.getErrors().add(error);
                 } catch (RestClientException | MalformedURLException ex) {
                     LOG.error("Error fetching commits for:" + repo.getRepoUrl(), ex);
@@ -228,7 +237,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
             } else {
                 LOG.info(repo.getRepoUrl()+ "::" + repo.getBranch() + ":: errorThreshold exceeded");
             }
-            repoCount++;
         }
         log("Repo Count", start, repoCount);
         log("New Commits", start, commitCount);
@@ -359,6 +367,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
         pulledRepos.sort(Comparator.comparing(GitHubRepo::getLastUpdated));
 
+        LOG.info("# of collections: " + pulledRepos.size());
         return pulledRepos;
     }
 
