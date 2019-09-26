@@ -1,5 +1,6 @@
 package com.capitalone.dashboard.collector;
 
+import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitHubParsed;
@@ -36,7 +37,7 @@ public class DefaultGitHubClientTest {
     public void init() {
         when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new GitHubSettings();
-        defaultGitHubClient = new DefaultGitHubClient(settings, restOperationsSupplier);
+        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier));
         defaultGitHubClient.setLdapMap(new HashMap<>());
 
     }
