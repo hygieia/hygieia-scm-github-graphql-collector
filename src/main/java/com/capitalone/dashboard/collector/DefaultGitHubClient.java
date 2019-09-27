@@ -1,5 +1,7 @@
 package com.capitalone.dashboard.collector;
 
+import com.capitalone.dashboard.client.RestClient;
+import com.capitalone.dashboard.client.RestUserInfo;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.CollectionMode;
 import com.capitalone.dashboard.model.Comment;
@@ -61,7 +63,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
     private final GitHubSettings settings;
 
-    private final RestOperations restOperations;
+    private final RestClient restClient;
 
     private List<Commit> commits;
     private List<GitRequest> pullRequests;
@@ -94,9 +96,9 @@ public class DefaultGitHubClient implements GitHubClient {
 
     @Autowired
     public DefaultGitHubClient(GitHubSettings settings,
-                               Supplier<RestOperations> restOperationsSupplier) {
+                               RestClient restClient) {
         this.settings = settings;
-        this.restOperations = restOperationsSupplier.get();
+        this.restClient = restClient;
 
         if (!CollectionUtils.isEmpty(settings.getNotBuiltCommits())) {
             settings.getNotBuiltCommits().stream().map(regExStr -> Pattern.compile(regExStr, Pattern.CASE_INSENSITIVE)).forEach(commitExclusionPatterns::add);
@@ -1105,44 +1107,20 @@ public class DefaultGitHubClient implements GitHubClient {
     private ResponseEntity<String> makeRestCallPost(String url, String userId, String password, String personalAccessToken, JSONObject query) {
         // Basic Auth only.
         if (!Objects.equals("", userId) && !Objects.equals("", password)) {
-            return restOperations.exchange(url, HttpMethod.POST, new HttpEntity<Object>(query, createHeaders(userId, password)), String.class);
-        }else if (personalAccessToken != null && !Objects.equals("", personalAccessToken)) {
-            return restOperations.exchange(url, HttpMethod.POST, new HttpEntity<Object>(query, createHeaders(personalAccessToken)), String.class);
-        }else if (settings.getPersonalAccessToken() != null && !Objects.equals("", settings.getPersonalAccessToken())) {
-            return restOperations.exchange(url, HttpMethod.POST, new HttpEntity<Object>(query, createHeaders(settings.getPersonalAccessToken())), String.class);
+            RestUserInfo userInfo = new RestUserInfo(userId, password);
+            return restClient.makeRestCallPost(url, userInfo, query);
+        } else if (personalAccessToken != null && !Objects.equals("", personalAccessToken)) {
+            return restClient.makeRestCallPost(url, "token", personalAccessToken, query);
         } else {
-            return restOperations.exchange(url, HttpMethod.POST, new HttpEntity<Object>(query, null), String.class);
+            // This handles the case when settings.getPersonalAccessToken() is empty
+            return restClient.makeRestCallPost(url, "token", settings.getPersonalAccessToken(), query);
         }
     }
 
     private ResponseEntity<String> makeRestCallGet(String url) throws RestClientException {
         // Basic Auth only.
-        if (settings.getPersonalAccessToken() != null && !Objects.equals("", settings.getPersonalAccessToken())) {
-            return restOperations.exchange(url, HttpMethod.GET,
-                    new HttpEntity<>(createHeaders(settings.getPersonalAccessToken())),
-                    String.class);
-        } else {
-            return restOperations.exchange(url, HttpMethod.GET, null,
-                    String.class);
-        }
-
-    }
-
-
-    private HttpHeaders createHeaders(final String userId, final String password) {
-        String auth = userId + ":" + password;
-        byte[] encodedAuth = Base64.encodeBase64(auth.getBytes(StandardCharsets.US_ASCII));
-        String authHeader = "Basic " + new String(encodedAuth);
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", authHeader);
-        return headers;
-    }
-
-    private HttpHeaders createHeaders(final String token) {
-        String authHeader = "token " + token;
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", authHeader);
-        return headers;
+        // This handles the case when settings.getPersonalAccessToken() is empty
+        return restClient.makeRestCallGet(url, "token", settings.getPersonalAccessToken());
     }
 
     private JSONObject parseAsObject(ResponseEntity<String> response) {
