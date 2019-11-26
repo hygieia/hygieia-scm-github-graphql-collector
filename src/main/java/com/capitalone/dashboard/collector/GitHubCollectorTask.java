@@ -34,17 +34,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 
 import java.net.MalformedURLException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -166,84 +156,103 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
         clean(collector);
         List<GitHubRepo> enabledRepos = enabledRepos(collector);
+        LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
         for (GitHubRepo repo : enabledRepos) {
             repoCount++;
-            LOG.info("Starting collection: " + repoCount + " of " + enabledRepos.size() + ": " + repo.getRepoUrl() + "/tree/" + repo.getBranch());
+            String repoUrl = repo.getRepoUrl() + "/tree/" + repo.getBranch();
+            String statusString = "UNKNOWN";
+            long lastUpdated = repo.getLastUpdated();
+            try {
+                boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
+                if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
+                    statusString = "SKIPPED, errorThreshold exceeded";
+                } else if (gitHubSettings.isCheckRateLimit() && !isUnderRateLimit(repo)) {
+                    LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
+                    // add 0.2 second delay
+                    statusString = "SKIPPED, rateLimit exceeded, sleep for 0.2s";
+                    sleep(200);
+                } else {
+                    try {
+                        List<GitRequest> allRequests = gitRequestRepository.findRequestNumberAndLastUpdated(repo.getId());
 
-            boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
+                        Map<Long, String> existingPRMap = allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "pull")).collect(
+                                Collectors.toMap(GitRequest::getUpdatedAt, GitRequest::getNumber,
+                                        (oldValue, newValue) -> oldValue
+                                )
+                        );
 
-            if (repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
+                        Map<Long, String> existingIssueMap = allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "issue")).collect(
+                                Collectors.toMap(GitRequest::getUpdatedAt, GitRequest::getNumber,
+                                        (oldValue, newValue) -> oldValue
+                                )
+                        );
 
-                try {
-                    if (gitHubSettings.isCheckRateLimit() &&  !isUnderRateLimit(repo)) {
-                        LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis()-start)/1000 + " seconds since start. Stopping processing");
-                        // add 0.2 second delay
-                        sleep(200);
-                        continue;
+                        gitHubClient.fireGraphQL(repo, firstRun, existingPRMap, existingIssueMap);
+
+                        // Get all the commits
+                        int commitCount1 = processCommits(repo);
+                        commitCount += commitCount1;
+
+                        //Get all the Pull Requests
+                        int pullCount1 = processPRorIssueList(repo, allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "pull")).collect(Collectors.toList()), "pull");
+                        pullCount += pullCount1;
+
+                        //Get all the Issues
+                        int issueCount1 = processPRorIssueList(repo, allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "issue")).collect(Collectors.toList()), "issue");
+                        issueCount += issueCount;
+
+                        // Due to timing of PRs and Commits in PR merge event, some commits may not be included in the response and will not be connected to a PR.
+                        // This is the place attempting to re-connect the commits and PRs in case they were missed during previous run.
+
+                        processOrphanCommits(repo);
+
+                        repo.setLastUpdated(System.currentTimeMillis());
+                        // if everything went alright, there should be no error!
+                        repo.getErrors().clear();
+                        statusString = "SUCCESS, pulls=" + pullCount1 + ", commits=" + pullCount1 + ", issues=" + issueCount1;
+                    } catch (HttpStatusCodeException hc) {
+                        LOG.error("Error fetching commits for:" + repo.getRepoUrl(), hc);
+                        statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
+                        CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
+                        if (hc.getStatusCode() == HttpStatus.UNAUTHORIZED || hc.getStatusCode() == HttpStatus.FORBIDDEN) {
+                            LOG.info("add 0.2 sec delay when received 401/403 from GitHub");
+                            sleep(200);
+                        }
+                        repo.getErrors().add(error);
+                    } catch (RestClientException | MalformedURLException ex) {
+                        LOG.error("Error fetching commits for:" + repo.getRepoUrl(), ex);
+                        statusString = "EXCEPTION, " + ex.getClass().getCanonicalName();
+                        CollectionError error = new CollectionError(CollectionError.UNKNOWN_HOST, ex.getMessage());
+                        repo.getErrors().add(error);
+                    } catch (HygieiaException he) {
+                        LOG.error("Error fetching commits for:" + repo.getRepoUrl(), he);
+                        statusString = "EXCEPTION, " + he.getClass().getCanonicalName();
+                        CollectionError error = new CollectionError(String.valueOf(he.getErrorCode()), he.getMessage());
+                        repo.getErrors().add(error);
                     }
-
-                    List<GitRequest> allRequests = gitRequestRepository.findRequestNumberAndLastUpdated(repo.getId());
-
-                    Map<Long, String> existingPRMap = allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "pull")).collect(
-                            Collectors.toMap(GitRequest::getUpdatedAt, GitRequest::getNumber,
-                                    (oldValue, newValue) -> oldValue
-                            )
-                    );
-
-                    Map<Long, String> existingIssueMap = allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "issue")).collect(
-                            Collectors.toMap(GitRequest::getUpdatedAt, GitRequest::getNumber,
-                                    (oldValue, newValue) -> oldValue
-                            )
-                    );
-
-
-                    gitHubClient.fireGraphQL(repo, firstRun, existingPRMap, existingIssueMap);
-
-                    // Get all the commits
-                    commitCount += processCommits(repo);
-
-                    //Get all the Pull Requests
-                    pullCount += processPRorIssueList(repo, allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "pull")).collect(Collectors.toList()), "pull");
-                    //Get all the Issues
-                    issueCount += processPRorIssueList(repo, allRequests.stream().filter(r -> Objects.equals(r.getRequestType(), "issue")).collect(Collectors.toList()), "issue");
-
-                    // Due to timing of PRs and Commits in PR merge event, some commits may not be included in the response and will not be connected to a PR.
-                    // This is the place attempting to re-connect the commits and PRs in case they were missed during previous run.
-
-                    processOrphanCommits(repo);
-
-                    repo.setLastUpdated(System.currentTimeMillis());
-                    // if everything went alright, there should be no error!
-                    repo.getErrors().clear();
-
-                } catch (HttpStatusCodeException hc) {
-                    LOG.error("Error fetching commits for:" + repo.getRepoUrl(), hc);
-                    CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
-                    if (hc.getStatusCode()==HttpStatus.UNAUTHORIZED || hc.getStatusCode()==HttpStatus.FORBIDDEN) {
-                        LOG.info("add 0.2 sec delay when received 401/403 from GitHub");
-                        sleep(200);
-                    }
-                    repo.getErrors().add(error);
-                } catch (RestClientException | MalformedURLException ex) {
-                    LOG.error("Error fetching commits for:" + repo.getRepoUrl(), ex);
-                    CollectionError error = new CollectionError(CollectionError.UNKNOWN_HOST, ex.getMessage());
-                    repo.getErrors().add(error);
-                } catch (HygieiaException he) {
-                    LOG.error("Error fetching commits for:" + repo.getRepoUrl(), he);
-                    CollectionError error = new CollectionError(String.valueOf(he.getErrorCode()), he.getMessage());
-                    repo.getErrors().add(error);
+                    gitHubRepoRepository.save(repo);
                 }
-                gitHubRepoRepository.save(repo);
-            } else {
-                LOG.info(repo.getRepoUrl()+ "::" + repo.getBranch() + ":: errorThreshold exceeded");
+            } catch (Throwable e) {
+                statusString = "EXCEPTION, " + e.getClass().getCanonicalName();
+                LOG.error("Unexpected exception when collecting url=" + repoUrl, e);
+            } finally {
+                String age = readableAge(lastUpdated, start);
+                LOG.info(String.format("%d of %d, repository=%s, lastUpdated=%d [%s], status=%s",
+                        repoCount, enabledRepos.size(), repoUrl, lastUpdated, age, statusString));
+
             }
         }
-        log("Repo Count", start, repoCount);
-        log("New Commits", start, commitCount);
-        log("New Pulls", start, pullCount);
-        log("New Issues", start, issueCount);
-        log("Finished", start);
+        long end = System.currentTimeMillis();
+        long elapsedSeconds = (end - start) / 1000;
+        LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
+                elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
+    }
 
+    private String readableAge(long lastUpdated, long start) {
+        if (lastUpdated<=0) return "never before";
+        else if (start-lastUpdated>48*3600000) return ((start-lastUpdated)/24*3600000) + " days ago";
+        else if (start-lastUpdated>2*3600000) return ((start-lastUpdated)/3600000) + " hours ago";
+        else return ((start-lastUpdated)/60000) + " minutes ago";
     }
 
     private void setupProxy() {
