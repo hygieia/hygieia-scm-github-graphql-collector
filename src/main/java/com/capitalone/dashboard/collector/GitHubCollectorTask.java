@@ -169,9 +169,9 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
         for (GitHubRepo repo : enabledRepos) {
             repoCount++;
-            String repoUrl = repo.getRepoUrl() + "/tree/" + repo.getBranch();
+            String repoUrl = repo==null?"null":(repo.getRepoUrl() + "/tree/" + repo.getBranch());
             String statusString = "UNKNOWN";
-            long lastUpdated = repo.getLastUpdated();
+            long lastUpdated = repo==null?0:repo.getLastUpdated();
             try {
                 boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
@@ -350,15 +350,23 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
     private int processPRorIssueList(GitHubRepo repo, List<GitRequest> existingList, String type) {
         int count = 0;
-
-        List<GitRequest> entries = "pull".equalsIgnoreCase(type) ? gitHubClient.getPulls() : gitHubClient.getIssues();
+        boolean isPull = "pull".equalsIgnoreCase(type);
+        List<GitRequest> entries = isPull ? gitHubClient.getPulls() : gitHubClient.getIssues();
 
         if (CollectionUtils.isEmpty(entries)) return 0;
+
+        List<String> pullNumbers = new ArrayList<>();
 
         for (GitRequest entry : entries) {
             Optional<GitRequest> existingOptional = existingList.stream().filter(r -> Objects.equals(r.getNumber(), entry.getNumber())).findFirst();
             GitRequest existing = existingOptional.orElse(null);
-
+            if (isPull) {
+                if (pullNumbers.size() < 10) {
+                    pullNumbers.add(entry.getNumber());
+                } else if (pullNumbers.size() == 10) {
+                    pullNumbers.add("...");
+                }
+            }
             if (existing == null) {
                 entry.setCollectorItemId(repo.getId());
                 count++;
@@ -368,7 +376,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
             }
             gitRequestRepository.save(entry);
         }
-        LOG.info("-- Saved " + type  + ":" + count);
+        LOG.info("-- Saved " + type  + ":" + count + (isPull? (" " + pullNumbers):""));
         return count;
     }
 
