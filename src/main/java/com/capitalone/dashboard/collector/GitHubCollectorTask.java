@@ -173,6 +173,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
             String statusString = "UNKNOWN";
             long lastUpdated = repo==null?0:repo.getLastUpdated();
             try {
+                if (repo==null) throw new HygieiaException("Repository returned from github is null", HygieiaException.BAD_DATA);
                 boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
                     statusString = "SKIPPED, errorThreshold exceeded";
