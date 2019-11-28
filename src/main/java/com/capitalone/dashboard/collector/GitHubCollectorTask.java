@@ -260,7 +260,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
     private String readableAge(long lastUpdated, long start) {
         if (lastUpdated<=0) return "never before";
-        else if (start-lastUpdated>48*3600000) return ((start-lastUpdated)/24*3600000) + " days ago";
+        else if (start-lastUpdated>48*3600000) return ((start-lastUpdated)/(24*3600000)) + " days ago";
         else if (start-lastUpdated>2*3600000) return ((start-lastUpdated)/3600000) + " hours ago";
         else return ((start-lastUpdated)/60000) + " minutes ago";
     }
