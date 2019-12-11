@@ -561,7 +561,7 @@ public class DefaultGitHubClient implements GitHubClient {
             boolean stop = (pull.getUpdatedAt() < historyTimeStamp) ||
                     ((!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber())));
             if (!stop) {
-//               localCount++;
+               localCount++;
                 pullRequests.add(pull);
             }
         }
