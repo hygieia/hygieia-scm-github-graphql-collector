@@ -560,13 +560,8 @@ public class DefaultGitHubClient implements GitHubClient {
 
             boolean stop = (pull.getUpdatedAt() < historyTimeStamp) ||
                     ((!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber())));
-            if (stop) {
-                paging.setLastPage(true);
-                LOG.debug("------ Stopping pull request processing. History check is met OR Found matching entry in existing pull requests. Pull Request#" + pull.getNumber());
-                break;
-            } else {
-                //add to the list
-                localCount++;
+            if (!stop) {
+//               localCount++;
                 pullRequests.add(pull);
             }
         }
