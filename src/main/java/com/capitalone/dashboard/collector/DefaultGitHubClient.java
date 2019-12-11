@@ -996,6 +996,18 @@ public class DefaultGitHubClient implements GitHubClient {
         return 0;
     }
 
+    /// Utility Methods
+    private long asLong(String val) {
+        try {
+            if (val != null) {
+                return Long.parseLong(val);
+            }
+        } catch (NumberFormatException ex) {
+            LOG.error("Invalid number format: " + ex.getMessage());
+        }
+        return 0;
+    }
+
     private long getTimeStampMills(String dateTime) {
         return StringUtils.isEmpty(dateTime) ? 0 : new DateTime(dateTime).getMillis();
     }
@@ -1064,7 +1076,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
         int limit = asInt(headers.get("X-RateLimit-Limit").get(0));
         int remaining = asInt(headers.get("X-RateLimit-Remaining").get(0));
-        long rateLimitResetAt = getTimeStampMills(headers.get("X-RateLimit-Reset").get(0));
+        long rateLimitResetAt = asLong(headers.get("X-RateLimit-Reset").get(0));
         LOG.info("limit=" + limit + ", remaining=" + remaining + ", rateLimitResetAt=" + rateLimitResetAt);
 
         rateLimit.setLimit(limit);
