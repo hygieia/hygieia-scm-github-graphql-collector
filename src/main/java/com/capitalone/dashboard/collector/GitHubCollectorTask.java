@@ -8,7 +8,6 @@ import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.CollectorItem;
 import com.capitalone.dashboard.model.CollectorType;
 import com.capitalone.dashboard.model.Commit;
-import com.capitalone.dashboard.model.GitHubRateLimit;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
@@ -28,7 +27,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
@@ -177,7 +175,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
                     statusString = "SKIPPED, errorThreshold exceeded";
-                } else if (gitHubSettings.isCheckRateLimit() && !isUnderRateLimit(repo)) {
+                } else if (gitHubSettings.isCheckRateLimit() && !gitHubClient.isUnderRateLimit()) {
                     LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
                     // add 0.2 second delay
                     statusString = "SKIPPED, rateLimit exceeded, sleep for 0.2s";
@@ -328,25 +326,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         }
         LOG.info("-- Saved Commits = " + count);
         return count;
-    }
-
-
-    private boolean isUnderRateLimit(GitHubRepo repo) throws MalformedURLException, HygieiaException {
-        GitHubRateLimit rateLimit = null;
-        try {
-            rateLimit = gitHubClient.getRateLimit(repo);
-            if(rateLimit!=null){
-                LOG.info("Remaining " + rateLimit.getRemaining() + " of limit " + rateLimit.getLimit()
-                        + " resetTime " + new DateTime(rateLimit.getResetTime()).toString("yyyy-MM-dd hh:mm:ss.SSa"));
-            }else{
-                LOG.info("Rate limit is null");
-            }
-
-        } catch (HttpClientErrorException hce) {
-            LOG.error("getRateLimit returned " + hce.getStatusCode() + " " + hce.getMessage() + " " + hce);
-            return false;
-        }
-        return rateLimit != null && (rateLimit.getRemaining() > gitHubSettings.getRateLimitThreshold());
     }
 
     private int processPRorIssueList(GitHubRepo repo, List<GitRequest> existingList, String type) {
