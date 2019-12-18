@@ -230,7 +230,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                             int retryAfterSeconds = NumberUtils.toInt(hc.getResponseHeaders().get(DefaultGitHubClient.RETRY_AFTER).get(0));
                             long startSleeping = System.currentTimeMillis();
                             LOG.info("Should Retry-After: " + retryAfterSeconds + " sec. Start sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa") );
-                            sleep(retryAfterSeconds*1000);
+                            sleep(retryAfterSeconds*1000L);
                             long endSleeping = System.currentTimeMillis();
                             LOG.info("Waking up after [" + (endSleeping-startSleeping)/1000L + "] sec, " +
                                     "at: " + new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
