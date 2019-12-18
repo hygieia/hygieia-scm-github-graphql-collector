@@ -72,7 +72,7 @@ public class GitHubCollectorTaskTest {
         when(gitRequestRepository.findNonMergedRequestNumberAndLastUpdated(any())).thenReturn(new ArrayList<>());
         when(gitHubSettings.getErrorThreshold()).thenReturn(1);
 
-        when(gitHubClient.getRateLimit(repo1)).thenReturn(getOkRateLimit());
+        when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(gitHubClient.getCommits()).thenReturn(getCommits());
 
         when(commitRepository.findByCollectorItemIdAndScmRevisionNumber(
@@ -115,8 +115,7 @@ public class GitHubCollectorTaskTest {
 
         when(commitRepository.findByCollectorItemIdAndScmRevisionNumber(
                 repo1.getId(), "1")).thenReturn(null);
-        when(gitHubClient.getRateLimit(repo1)).thenReturn(getOkRateLimit());
-        when(gitHubClient.getRateLimit(repo2)).thenReturn(getOkRateLimit());
+        when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
 
         task.collect(collector);
@@ -157,8 +156,7 @@ public class GitHubCollectorTaskTest {
         when(commitRepository.findByCollectorItemIdAndScmRevisionNumber(
                 repo1.getId(), "1")).thenReturn(null);
 
-        when(gitHubClient.getRateLimit(repo1)).thenReturn(getOkRateLimit());
-        when(gitHubClient.getRateLimit(repo2)).thenReturn(getOkRateLimit());
+        when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
 
         task.collect(collector);
@@ -197,8 +195,7 @@ public class GitHubCollectorTaskTest {
         when(commitRepository.findByCollectorItemIdAndScmRevisionNumber(
                 repo1.getId(), "1")).thenReturn(null);
 
-        when(gitHubClient.getRateLimit(repo1)).thenReturn(getOkRateLimit());
-        when(gitHubClient.getRateLimit(repo2)).thenReturn(getOkRateLimit());
+        when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
         
         task.collect(collector);
