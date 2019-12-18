@@ -8,7 +8,7 @@ import com.capitalone.dashboard.model.Comment;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.CommitStatus;
 import com.capitalone.dashboard.model.CommitType;
-import com.capitalone.dashboard.model.GitHubGraphQLQuery;
+
 import com.capitalone.dashboard.model.GitHubPaging;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
@@ -16,8 +16,10 @@ import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.model.MergeEvent;
 import com.capitalone.dashboard.model.Review;
+import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.Encryption;
 import com.capitalone.dashboard.util.EncryptionException;
+import com.capitalone.dashboard.util.GithubGraphQLQuery;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -260,7 +262,7 @@ public class DefaultGitHubClient implements GitHubClient {
             return paging;
         }
 
-        String queryString = "pull".equalsIgnoreCase(type) ? GitHubGraphQLQuery.QUERY_NEW_PR_CHECK : GitHubGraphQLQuery.QUERY_NEW_ISSUE_CHECK;
+        String queryString = "pull".equalsIgnoreCase(type) ? GithubGraphQLQuery.QUERY_NEW_PR_CHECK : GithubGraphQLQuery.QUERY_NEW_ISSUE_CHECK;
         JSONObject query = new JSONObject();
         JSONObject variableJSON = new JSONObject();
         variableJSON.put("owner", gitHubParsed.getOrgName());
@@ -328,7 +330,7 @@ public class DefaultGitHubClient implements GitHubClient {
         LOG.debug("Collection Mode =" + mode.toString());
         switch (mode) {
             case FirstTimeAll:
-                query = GitHubGraphQLQuery.QUERY_BASE_ALL_FIRST + GitHubGraphQLQuery.QUERY_PULL_HEADER_FIRST + GitHubGraphQLQuery.QUERY_PULL_MAIN + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_ISSUES_HEADER_FIRST + GitHubGraphQLQuery.QUERY_ISSUE_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_PULL_HEADER_FIRST + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_FIRST + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
@@ -337,7 +339,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case FirstTimeCommitOnly:
-                query = GitHubGraphQLQuery.QUERY_BASE_ALL_FIRST + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
@@ -345,7 +347,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 break;
 
             case FirstTimeCommitAndIssue:
-                query = GitHubGraphQLQuery.QUERY_BASE_ALL_FIRST + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_ISSUES_HEADER_FIRST + GitHubGraphQLQuery.QUERY_ISSUE_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_FIRST + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
@@ -353,7 +355,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 break;
 
             case FirstTimeCommitAndPull:
-                query = GitHubGraphQLQuery.QUERY_BASE_ALL_FIRST + GitHubGraphQLQuery.QUERY_PULL_HEADER_FIRST + GitHubGraphQLQuery.QUERY_PULL_MAIN + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_PULL_HEADER_FIRST + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
@@ -361,7 +363,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 break;
 
             case CommitOnly:
-                query = GitHubGraphQLQuery.QUERY_BASE_COMMIT_ONLY_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_COMMIT_ONLY_AFTER + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("afterCommit", commitPaging.getCursor());
                 variableJSON.put("branch", repo.getBranch());
@@ -372,7 +374,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case PullOnly:
-                query = GitHubGraphQLQuery.QUERY_BASE_PULL_ONLY_AFTER + GitHubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GitHubGraphQLQuery.QUERY_PULL_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_PULL_ONLY_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("afterPull", pullPaging.getCursor());
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
@@ -381,7 +383,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case IssueOnly:
-                query = GitHubGraphQLQuery.QUERY_BASE_ISSUE_ONLY_AFTER + GitHubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GitHubGraphQLQuery.QUERY_ISSUE_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ISSUE_ONLY_AFTER + GithubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("afterIssue", issuePaging.getCursor());
                 jsonObj.put("query", query);
                 jsonObj.put("variables", variableJSON.toString());
@@ -389,7 +391,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case CommitAndIssue:
-                query = GitHubGraphQLQuery.QUERY_BASE_COMMIT_AND_ISSUE_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GitHubGraphQLQuery.QUERY_ISSUE_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_COMMIT_AND_ISSUE_AFTER + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("afterIssue", issuePaging.getCursor());
                 variableJSON.put("afterCommit", commitPaging.getCursor());
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
@@ -401,7 +403,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case CommitAndPull:
-                query = GitHubGraphQLQuery.QUERY_BASE_COMMIT_AND_PULL_AFTER + GitHubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GitHubGraphQLQuery.QUERY_PULL_MAIN + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_COMMIT_AND_PULL_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("afterPull", pullPaging.getCursor());
                 variableJSON.put("afterCommit", commitPaging.getCursor());
@@ -412,7 +414,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case PullAndIssue:
-                query = GitHubGraphQLQuery.QUERY_BASE_ISSUE_AND_PULL_AFTER + GitHubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GitHubGraphQLQuery.QUERY_PULL_MAIN + GitHubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GitHubGraphQLQuery.QUERY_ISSUE_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ISSUE_AND_PULL_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("afterPull", pullPaging.getCursor());
                 variableJSON.put("afterIssue", issuePaging.getCursor());
                 variableJSON.put("branch", repo.getBranch());
@@ -422,7 +424,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
             case All:
-                query = GitHubGraphQLQuery.QUERY_BASE_ALL_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GitHubGraphQLQuery.QUERY_COMMIT_MAIN + GitHubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GitHubGraphQLQuery.QUERY_PULL_MAIN + GitHubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GitHubGraphQLQuery.QUERY_ISSUE_MAIN + GitHubGraphQLQuery.QUERY_END;
+                query = GithubGraphQLQuery.QUERY_BASE_ALL_AFTER + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
                 variableJSON.put("afterPull", pullPaging.getCursor());
                 variableJSON.put("afterCommit", commitPaging.getCursor());
