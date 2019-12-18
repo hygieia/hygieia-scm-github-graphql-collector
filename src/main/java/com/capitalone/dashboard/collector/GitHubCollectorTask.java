@@ -8,7 +8,6 @@ import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.CollectorItem;
 import com.capitalone.dashboard.model.CollectorType;
 import com.capitalone.dashboard.model.Commit;
-import com.capitalone.dashboard.model.GitHubRateLimit;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
@@ -20,6 +19,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bson.types.ObjectId;
@@ -28,7 +28,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
@@ -167,6 +166,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         clean(collector);
         List<GitHubRepo> enabledRepos = enabledRepos(collector);
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
+        LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
         for (GitHubRepo repo : enabledRepos) {
             repoCount++;
             String repoUrl = repo==null?"null":(repo.getRepoUrl() + "/tree/" + repo.getBranch());
@@ -177,7 +177,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
                     statusString = "SKIPPED, errorThreshold exceeded";
-                } else if (gitHubSettings.isCheckRateLimit() && !isUnderRateLimit(repo)) {
+                } else if (!gitHubClient.isUnderRateLimit()) {
                     LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
                     // add 0.2 second delay
                     statusString = "SKIPPED, rateLimit exceeded, sleep for 0.2s";
@@ -226,8 +226,14 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                         statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
                         CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
                         if (hc.getStatusCode() == HttpStatus.UNAUTHORIZED || hc.getStatusCode() == HttpStatus.FORBIDDEN) {
-                            LOG.info("add 0.2 sec delay when received 401/403 from GitHub");
-                            sleep(200);
+                            LOG.error("Received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody="+hc.getResponseBodyAsString());
+                            int retryAfterSeconds = NumberUtils.toInt(hc.getResponseHeaders().get(DefaultGitHubClient.RETRY_AFTER).get(0));
+                            long startSleeping = System.currentTimeMillis();
+                            LOG.info("Should Retry-After: " + retryAfterSeconds + " sec. Start sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa") );
+                            sleep(retryAfterSeconds*1000);
+                            long endSleeping = System.currentTimeMillis();
+                            LOG.info("Waking up after [" + (endSleeping-startSleeping)/1000L + "] sec, " +
+                                    "at: " + new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
                         }
                         repo.getErrors().add(error);
                     } catch (RestClientException | MalformedURLException ex) {
@@ -328,25 +334,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         }
         LOG.info("-- Saved Commits = " + count);
         return count;
-    }
-
-
-    private boolean isUnderRateLimit(GitHubRepo repo) throws MalformedURLException, HygieiaException {
-        GitHubRateLimit rateLimit = null;
-        try {
-            rateLimit = gitHubClient.getRateLimit(repo);
-            if(rateLimit!=null){
-                LOG.info("Remaining " + rateLimit.getRemaining() + " of limit " + rateLimit.getLimit()
-                        + " resetTime " + new DateTime(rateLimit.getResetTime()).toString("yyyy-MM-dd hh:mm:ss.SSa"));
-            }else{
-                LOG.info("Rate limit is null");
-            }
-
-        } catch (HttpClientErrorException hce) {
-            LOG.error("getRateLimit returned " + hce.getStatusCode() + " " + hce.getMessage() + " " + hce);
-            return false;
-        }
-        return rateLimit != null && (rateLimit.getRemaining() > gitHubSettings.getRateLimitThreshold());
     }
 
     private int processPRorIssueList(GitHubRepo repo, List<GitRequest> existingList, String type) {

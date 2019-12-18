@@ -26,5 +26,7 @@ public interface GitHubClient {
 
     GitHubRateLimit getRateLimit(GitHubRepo repo) throws MalformedURLException, HygieiaException;
 
+    boolean isUnderRateLimit();
+
     long getRepoOffsetTime(GitHubRepo repo);
 }
