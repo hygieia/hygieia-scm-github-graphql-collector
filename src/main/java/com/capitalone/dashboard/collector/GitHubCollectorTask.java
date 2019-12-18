@@ -383,18 +383,12 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     private List<GitHubRepo> enabledRepos(Collector collector) {
         List<GitHubRepo> repos = gitHubRepoRepository.findEnabledGitHubRepos(collector.getId());
 
-        List<GitHubRepo> pulledRepos
-                = Optional.ofNullable(repos)
-                    .orElseGet(Collections::emptyList).stream()
-                    .filter(pulledRepo -> !pulledRepo.isPushed())
-                    .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(repos)) { return new ArrayList<>(); }
 
-        if (CollectionUtils.isEmpty(pulledRepos)) { return new ArrayList<>(); }
+        repos.sort(Comparator.comparing(GitHubRepo::getLastUpdated));
 
-        pulledRepos.sort(Comparator.comparing(GitHubRepo::getLastUpdated));
-
-        LOG.info("# of collections: " + pulledRepos.size());
-        return pulledRepos;
+        LOG.info("# of collections: " + repos.size());
+        return repos;
     }
 
     private boolean isNewCommit(GitHubRepo repo, Commit commit) {
