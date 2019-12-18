@@ -15,6 +15,7 @@ import com.capitalone.dashboard.repository.CommitRepository;
 import com.capitalone.dashboard.repository.ComponentRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.repository.GitRequestRepository;
+import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
