@@ -31,6 +31,7 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
@@ -67,7 +68,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
     private static final int FIRST_RUN_HISTORY_DEFAULT = 14;
-    private GitHubRateLimit rateLimit = new GitHubRateLimit();
+    private GitHubRateLimit rateLimit = null;
 
     public class RedirectedStatus {
         private boolean isRedirected = false;
@@ -935,18 +936,28 @@ public class DefaultGitHubClient implements GitHubClient {
 
     @Override
     public boolean isUnderRateLimit() {
+        if (!settings.isCheckRateLimit()) return true;
+        if (rateLimit == null) {
+            LOG.info("Rate limit is null");
+            rateLimit = new GitHubRateLimit();
+            return true;
+        }
         if (rateLimit.getRemaining() > 0) {
             LOG.info("Remaining " + rateLimit.getRemaining() + " of limit " + rateLimit.getLimit()
-                    + " resetTime " + new DateTime(rateLimit.getResetTime()).toString("yyyy-MM-dd hh:mm:ss.SSa"));
+                    + " resetTime " + rateLimit.getResetTime() + " (" + new DateTime(rateLimit.getResetTime()*1000L).toString("yyyy-MM-dd hh:mm:ss.SSa")+")");
         } else {
-            LOG.info("Rate limit is not available yet");
+            LOG.info("Rate limit values not available yet");
             return true;
         }
 
         return (rateLimit.getRemaining() > settings.getRateLimitThreshold());
     }
 
+    /**
+     * @deprecated  use isUnderRateLimit() instead.
+     */
     @Override
+    @Deprecated
     public GitHubRateLimit getRateLimit(GitHubRepo repo) throws MalformedURLException, HygieiaException {
         return rateLimit;
     }
@@ -1070,19 +1081,19 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONObject data = (JSONObject) parseAsObject(response).get("data");
         JSONArray errors = getArray(parseAsObject(response), "errors");
         HttpHeaders headers = response.getHeaders();
-        LOG.info("X-RateLimit-Limit=" + response.getHeaders().get("X-RateLimit-Limit")
-                    + ", X-RateLimit-Remaining=" + response.getHeaders().get("X-RateLimit-Remaining")
-                    + ", X-RateLimit-Reset=" + response.getHeaders().get("X-RateLimit-Reset"));
 
-        int limit = asInt(headers.get("X-RateLimit-Limit").get(0));
-        int remaining = asInt(headers.get("X-RateLimit-Remaining").get(0));
-        long rateLimitResetAt = asLong(headers.get("X-RateLimit-Reset").get(0));
-        LOG.info("limit=" + limit + ", remaining=" + remaining + ", rateLimitResetAt=" + rateLimitResetAt);
+        if (headers !=null && !CollectionUtils.isEmpty(headers.get("X-RateLimit-Limit"))
+                && !CollectionUtils.isEmpty(headers.get("X-RateLimit-Remaining"))
+                && !CollectionUtils.isEmpty(headers.get("X-RateLimit-Reset")) ) {
+            int limit = asInt(headers.get("X-RateLimit-Limit").get(0));
+            int remaining = asInt(headers.get("X-RateLimit-Remaining").get(0));
+            long rateLimitResetAt = asLong(headers.get("X-RateLimit-Reset").get(0));
+            LOG.info("limit=" + limit + ", remaining=" + remaining + ", rateLimitResetAt=" + rateLimitResetAt);
 
-        rateLimit.setLimit(limit);
-        rateLimit.setRemaining(remaining);
-        rateLimit.setResetTime(rateLimitResetAt);
-
+            rateLimit.setLimit(limit);
+            rateLimit.setRemaining(remaining);
+            rateLimit.setResetTime(rateLimitResetAt);
+        }
         if (CollectionUtils.isEmpty(errors)) {
             return data;
         }

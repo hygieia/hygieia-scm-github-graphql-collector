@@ -165,6 +165,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         clean(collector);
         List<GitHubRepo> enabledRepos = enabledRepos(collector);
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
+        LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
         for (GitHubRepo repo : enabledRepos) {
             repoCount++;
             String repoUrl = repo==null?"null":(repo.getRepoUrl() + "/tree/" + repo.getBranch());
@@ -175,7 +176,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
                     statusString = "SKIPPED, errorThreshold exceeded";
-                } else if (gitHubSettings.isCheckRateLimit() && !gitHubClient.isUnderRateLimit()) {
+                } else if (!gitHubClient.isUnderRateLimit()) {
                     LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
                     // add 0.2 second delay
                     statusString = "SKIPPED, rateLimit exceeded, sleep for 0.2s";
@@ -224,8 +225,14 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                         statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
                         CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
                         if (hc.getStatusCode() == HttpStatus.UNAUTHORIZED || hc.getStatusCode() == HttpStatus.FORBIDDEN) {
-                            LOG.info("add 0.2 sec delay when received 401/403 from GitHub");
-                            sleep(200);
+                            LOG.info("received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody="+hc.getResponseBodyAsString());
+                            int retryAfterSeconds = asInt(hc.getResponseHeaders().get("Retry-After").get(0));
+                            long startSleeping = System.currentTimeMillis();
+                            LOG.info("should Retry-After: " + retryAfterSeconds + " sec. sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa") );
+                            sleep(retryAfterSeconds*1000);
+                            long endSleeping = System.currentTimeMillis();
+                            LOG.info("waking up after [" + (endSleeping-startSleeping)/1000 + "] sec, " +
+                                    "at: " + new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
                         }
                         repo.getErrors().add(error);
                     } catch (RestClientException | MalformedURLException ex) {
@@ -255,6 +262,18 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         long elapsedSeconds = (end - start) / 1000;
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
+    }
+
+    /// Utility Methods
+    private int asInt(String val) {
+        try {
+            if (val != null) {
+                return Integer.parseInt(val);
+            }
+        } catch (NumberFormatException ex) {
+            LOG.error("Invalid number format: " + ex.getMessage());
+        }
+        return 0;
     }
 
     private String readableAge(long lastUpdated, long start) {
