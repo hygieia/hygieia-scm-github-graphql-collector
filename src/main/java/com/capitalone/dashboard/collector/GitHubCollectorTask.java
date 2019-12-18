@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bson.types.ObjectId;
@@ -225,13 +226,13 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                         statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
                         CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
                         if (hc.getStatusCode() == HttpStatus.UNAUTHORIZED || hc.getStatusCode() == HttpStatus.FORBIDDEN) {
-                            LOG.info("received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody="+hc.getResponseBodyAsString());
-                            int retryAfterSeconds = asInt(hc.getResponseHeaders().get("Retry-After").get(0));
+                            LOG.error("Received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody="+hc.getResponseBodyAsString());
+                            int retryAfterSeconds = NumberUtils.toInt(hc.getResponseHeaders().get(DefaultGitHubClient.RETRY_AFTER).get(0));
                             long startSleeping = System.currentTimeMillis();
-                            LOG.info("should Retry-After: " + retryAfterSeconds + " sec. sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa") );
+                            LOG.info("Should Retry-After: " + retryAfterSeconds + " sec. Start sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa") );
                             sleep(retryAfterSeconds*1000);
                             long endSleeping = System.currentTimeMillis();
-                            LOG.info("waking up after [" + (endSleeping-startSleeping)/1000 + "] sec, " +
+                            LOG.info("Waking up after [" + (endSleeping-startSleeping)/1000L + "] sec, " +
                                     "at: " + new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
                         }
                         repo.getErrors().add(error);
@@ -262,18 +263,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         long elapsedSeconds = (end - start) / 1000;
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
-    }
-
-    /// Utility Methods
-    private int asInt(String val) {
-        try {
-            if (val != null) {
-                return Integer.parseInt(val);
-            }
-        } catch (NumberFormatException ex) {
-            LOG.error("Invalid number format: " + ex.getMessage());
-        }
-        return 0;
     }
 
     private String readableAge(long lastUpdated, long start) {

@@ -56,6 +56,12 @@ import java.util.stream.Collectors;
 public class DefaultGitHubClient implements GitHubClient {
     private static final Log LOG = LogFactory.getLog(DefaultGitHubClient.class);
 
+    // GitHub response headers:
+    public static final String X_RATE_LIMIT_LIMIT = "X-RateLimit-Limit";
+    public static final String X_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining";
+    public static final String X_RATE_LIMIT_RESET = "X-RateLimit-Reset";
+    public static final String RETRY_AFTER = "Retry-After";
+
     private final GitHubSettings settings;
 
     private final RestClient restClient;
@@ -990,31 +996,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
     /// Utility Methods
     private int asInt(JSONObject json, String key) {
-        return asInt(str(json, key));
-    }
-
-    /// Utility Methods
-    private int asInt(String val) {
-        try {
-            if (val != null) {
-                return Integer.parseInt(val);
-            }
-        } catch (NumberFormatException ex) {
-            LOG.error("Invalid number format: " + ex.getMessage());
-        }
-        return 0;
-    }
-
-    /// Utility Methods
-    private long asLong(String val) {
-        try {
-            if (val != null) {
-                return Long.parseLong(val);
-            }
-        } catch (NumberFormatException ex) {
-            LOG.error("Invalid number format: " + ex.getMessage());
-        }
-        return 0;
+        return NumberUtils.toInt(str(json, key));
     }
 
     private long getTimeStampMills(String dateTime) {
@@ -1080,12 +1062,12 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONArray errors = getArray(parseAsObject(response), "errors");
         HttpHeaders headers = response.getHeaders();
 
-        if (headers !=null && !CollectionUtils.isEmpty(headers.get("X-RateLimit-Limit"))
-                && !CollectionUtils.isEmpty(headers.get("X-RateLimit-Remaining"))
-                && !CollectionUtils.isEmpty(headers.get("X-RateLimit-Reset")) ) {
-            int limit = asInt(headers.get("X-RateLimit-Limit").get(0));
-            int remaining = asInt(headers.get("X-RateLimit-Remaining").get(0));
-            long rateLimitResetAt = asLong(headers.get("X-RateLimit-Reset").get(0));
+        if (headers !=null && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_LIMIT))
+                && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_REMAINING))
+                && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_RESET)) ) {
+            int limit = NumberUtils.toInt(headers.get(X_RATE_LIMIT_LIMIT).get(0));
+            int remaining = NumberUtils.toInt(headers.get(X_RATE_LIMIT_REMAINING).get(0));
+            long rateLimitResetAt = NumberUtils.toLong(headers.get(X_RATE_LIMIT_RESET).get(0));
             LOG.info("limit=" + limit + ", remaining=" + remaining + ", rateLimitResetAt=" + rateLimitResetAt);
 
             rateLimit.setLimit(limit);
