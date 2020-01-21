@@ -948,9 +948,15 @@ public class DefaultGitHubClient implements GitHubClient {
             rateLimit = new GitHubRateLimit();
             return true;
         }
+        long resetTimeMillis = rateLimit.getResetTime()*1000L;
+        if ( (System.currentTimeMillis() - resetTimeMillis) > 5000L) {
+            LOG.info("reset time is more than 5 seconds in the past, reset the remaining rate lime to max allowed");
+            rateLimit.setRemaining( rateLimit.getLimit() );
+        }
+
         if (rateLimit.getRemaining() > 0) {
             LOG.info("Remaining " + rateLimit.getRemaining() + " of limit " + rateLimit.getLimit()
-                    + " resetTime " + rateLimit.getResetTime() + " (" + new DateTime(rateLimit.getResetTime()*1000L).toString("yyyy-MM-dd hh:mm:ss.SSa")+")");
+                    + " resetTime " + rateLimit.getResetTime() + " (" + new DateTime(resetTimeMillis).toString("yyyy-MM-dd hh:mm:ss.SSa")+")");
         } else {
             LOG.info("Rate limit values not available yet");
             return true;
