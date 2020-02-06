@@ -157,7 +157,8 @@ public class DefaultGitHubClient implements GitHubClient {
         String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey());
         boolean alldone = false;
 
-        GitHubPaging dummyPRPaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingPRMap, "pull", firstRun);
+        GitHubPaging dummyPRPaging = new GitHubPaging();
+        dummyPRPaging.setLastPage(false);
         GitHubPaging dummyIssuePaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingIssueMap, "issue", firstRun);
         GitHubPaging dummyCommitPaging = new GitHubPaging();
         dummyCommitPaging.setLastPage(false);
