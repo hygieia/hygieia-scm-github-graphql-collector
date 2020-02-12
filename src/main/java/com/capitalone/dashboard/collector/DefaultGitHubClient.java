@@ -556,22 +556,9 @@ public class DefaultGitHubClient implements GitHubClient {
                 pull.setBaseSha(str((JSONObject) ((JSONObject) node.get("baseRef")).get("target"), "oid"));
             }
             pull.setTargetBranch(str(node, "baseRefName"));
-            //pull.setTargetRepo(gitHubParsed.getUrl());
             pull.setTargetRepo(!Objects.equals("", gitHubParsed.getOrgName()) ? gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName() : gitHubParsed.getRepoName());
-
-//            LOG.debug("pr " + pull.getNumber() + " mergedAt " + new DateTime(pull.getMergedAt()).toString("yyyy-MM-dd hh:mm:ss.SSa")
-//                                              + " updateAt " + new DateTime(pull.getUpdatedAt()).toString("yyyy-MM-dd hh:mm:ss.SSa")
-//                                              + " historAt " + new DateTime(historyTimeStamp).toString("yyyy-MM-dd hh:mm:ss.SSa"));
-
-            boolean stop = (pull.getUpdatedAt() < historyTimeStamp) ||
-                    ((!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber())));
-            if (stop) {
-                LOG.debug("------ Skipping pull request processing. History check is met OR Found matching entry in existing pull requests. Pull Request#" + pull.getNumber());
-                paging.setLastPage(true);
-            }else{
-                localCount++;
-                pullRequests.add(pull);
-            }
+            localCount++;
+            pullRequests.add(pull);
         }
         paging.setCurrentCount(localCount);
         return paging;
