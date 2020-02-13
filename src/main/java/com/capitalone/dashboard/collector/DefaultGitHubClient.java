@@ -557,10 +557,16 @@ public class DefaultGitHubClient implements GitHubClient {
             }
             pull.setTargetBranch(str(node, "baseRefName"));
             pull.setTargetRepo(!Objects.equals("", gitHubParsed.getOrgName()) ? gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName() : gitHubParsed.getRepoName());
+            boolean prExists = (pull.getUpdatedAt() < historyTimeStamp) ||
+                    ((!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber())));
+            if (prExists) {
+                pullRequests.add(pull);
+            }
             localCount++;
-            pullRequests.add(pull);
+
         }
         paging.setCurrentCount(localCount);
+        paging.setLastPage(true);
         return paging;
     }
 
