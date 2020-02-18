@@ -319,6 +319,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         if (existingCount == 0) {
             List<Commit> newCommits = gitHubClient.getCommits();
             for(Commit c : newCommits) {
+                c.setCollectorItemId(repo.getId());
                 if(commitRepository.save(c) != null) {
                     count++;
                 }
