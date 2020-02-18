@@ -315,11 +315,15 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     private int processCommits(GitHubRepo repo) {
         int count = 0;
         Long existingCount = commitRepository.countCommitsByCollectorItemId(repo.getId());
+        long start = System.currentTimeMillis();
         if (existingCount == 0) {
             List<Commit> newCommits = gitHubClient.getCommits();
-            newCommits.forEach(c -> c.setCollectorItemId(repo.getId()));
-            Iterable<Commit> saved = commitRepository.save(newCommits);
-            count = saved != null ? Lists.newArrayList(saved).size() : 0;
+            for(Commit c : newCommits) {
+                c.setCollectorItemId(repo.getId());
+                if(commitRepository.save(c) != null) {
+                    count++;
+                }
+            }
         } else {
             Collection<Commit> nonDupCommits = gitHubClient.getCommits().stream()
                     .<Map<String, Commit>> collect(HashMap::new,(m,c)->m.put(c.getScmRevisionNumber(), c), Map::putAll)
@@ -333,7 +337,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 }
             }
         }
-        LOG.info("-- Saved Commits = " + count);
+        LOG.info("-- Saved Commits = " + count + "; Duration = " + (System.currentTimeMillis()-start) + " milliseconds");
         return count;
     }
 

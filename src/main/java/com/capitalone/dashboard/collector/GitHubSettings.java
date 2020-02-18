@@ -32,7 +32,7 @@ public class GitHubSettings {
 	private long commitPullSyncTime;
 	@Value("${github.offsetMinutes:10}") // 10 mins default
 	private int offsetMinutes;
-	@Value("${github.fetchCount:100}")
+	@Value("${github.fetchCount:50}")
 	private int fetchCount;
 
 	private String personalAccessToken;
