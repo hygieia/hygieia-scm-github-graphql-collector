@@ -76,6 +76,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
     private static final int FIRST_RUN_HISTORY_DEFAULT = 14;
+    private static final long FOURTEEN_DAYS_IN_MILLISECONDS = 14 * 24 * 60 * 1000;
     private GitHubRateLimit rateLimit = null;
 
     public class RedirectedStatus {
@@ -109,8 +110,7 @@ public class DefaultGitHubClient implements GitHubClient {
         }
     }
 
-    private int getFetchCount(boolean firstRun) {
-        if (firstRun) return 100;
+    private int getFetchCount() {
         return settings.getFetchCount();
     }
 
@@ -189,7 +189,8 @@ public class DefaultGitHubClient implements GitHubClient {
             }
         }
 
-        LOG.info("-- Collected " + commits.size() + " Commits, " + pullRequests.size() + " Pull Requests, " + issues.size() + " Issues since " + getRunDate(repo, firstRun, false));
+        long oldestPRTimestamp = pullRequests.get(pullRequests.size()-1).getCreatedAt();
+        LOG.info("-- Collected " + commits.size() + " Commits, " + pullRequests.size() + " Pull Requests, " + issues.size() + " Issues since " + getDate(new DateTime(oldestPRTimestamp), 0, 0));
 
         if (firstRun) {
             connectCommitToPulls();
@@ -232,7 +233,9 @@ public class DefaultGitHubClient implements GitHubClient {
                 loopCount++;
             }
         }
-        LOG.info("-- Collected " + missingCommitCount + " Missing Commits, since " + getRunDate(repo, firstRun, true));
+
+        long oldestCommitTimestamp = commits.get(commits.size()-1).getScmCommitTimestamp();
+        LOG.info("-- Collected " + missingCommitCount + " Missing Commits, since " + getDate(new DateTime(oldestCommitTimestamp), 0, 0));
 
         connectCommitToPulls();
     }
@@ -326,7 +329,7 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONObject variableJSON = new JSONObject();
         variableJSON.put("owner", gitHubParsed.getOrgName());
         variableJSON.put("name", gitHubParsed.getRepoName());
-        variableJSON.put("fetchCount", getFetchCount(firstRun));
+        variableJSON.put("fetchCount", getFetchCount());
 
         LOG.debug("Collection Mode =" + mode.toString());
         switch (mode) {
@@ -564,9 +567,11 @@ public class DefaultGitHubClient implements GitHubClient {
             }
             localCount++;
 
+            if(pull.getScmCommitTimestamp() < (System.currentTimeMillis()- FOURTEEN_DAYS_IN_MILLISECONDS)) {
+                paging.setLastPage(true);
+            }
         }
         paging.setCurrentCount(localCount);
-        paging.setLastPage(true);
         return paging;
     }
 
@@ -627,6 +632,10 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setFirstEverCommit(CollectionUtils.isEmpty(parentShas));
             commit.setType(getCommitType(CollectionUtils.size(parentShas), message));
             commits.add(commit);
+
+            if(commit.getScmCommitTimestamp() < (System.currentTimeMillis()- FOURTEEN_DAYS_IN_MILLISECONDS)) {
+                paging.setLastPage(true);
+            }
         }
         return paging;
     }
