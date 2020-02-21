@@ -189,8 +189,12 @@ public class DefaultGitHubClient implements GitHubClient {
             }
         }
 
-        long oldestPRTimestamp = pullRequests.get(pullRequests.size()-1).getCreatedAt();
-        LOG.info("-- Collected " + commits.size() + " Commits, " + pullRequests.size() + " Pull Requests, " + issues.size() + " Issues since " + getDate(new DateTime(oldestPRTimestamp), 0, 0));
+        if(CollectionUtils.isEmpty(pullRequests)) {
+            LOG.info("-- " + repo.getRepoUrl() + repo.getBranch() + " has no pull requests");
+        } else {
+            long oldestPRTimestamp = pullRequests.get(pullRequests.size()-1).getCreatedAt();
+            LOG.info("-- Collected " + commits.size() + " Commits, " + pullRequests.size() + " Pull Requests, " + issues.size() + " Issues since " + getDate(new DateTime(oldestPRTimestamp), 0, 0));
+        }
 
         if (firstRun) {
             connectCommitToPulls();
@@ -234,8 +238,12 @@ public class DefaultGitHubClient implements GitHubClient {
             }
         }
 
-        long oldestCommitTimestamp = commits.get(commits.size()-1).getScmCommitTimestamp();
-        LOG.info("-- Collected " + missingCommitCount + " Missing Commits, since " + getDate(new DateTime(oldestCommitTimestamp), 0, 0));
+        if(CollectionUtils.isEmpty(commits)) {
+            LOG.info("-- " + repo.getRepoUrl() + repo.getBranch() + " has no commits");
+        } else {
+            long oldestCommitTimestamp = commits.get(commits.size()-1).getScmCommitTimestamp();
+            LOG.info("-- Collected " + missingCommitCount + " Missing Commits, since " + getDate(new DateTime(oldestCommitTimestamp), 0, 0));
+        }
 
         connectCommitToPulls();
     }
