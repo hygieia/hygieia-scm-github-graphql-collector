@@ -75,7 +75,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
 
     private static final int FIRST_RUN_HISTORY_DEFAULT = 14;
-    private static final long FOURTEEN_DAYS_IN_MILLISECONDS = 14 * 24 * 60 * 1000;
+    private static final long ONE_DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
     private GitHubRateLimit rateLimit = null;
 
     public class RedirectedStatus {
@@ -575,7 +575,7 @@ public class DefaultGitHubClient implements GitHubClient {
             }else{
                 localCount++;
                 pullRequests.add(pull);
-                if(pull.getUpdatedAt() < (System.currentTimeMillis() - (long) settings.getFirstRunHistoryDays()*24*60*60*1000)) {
+                if(pull.getUpdatedAt() < (System.currentTimeMillis() - (long) settings.getFirstRunHistoryDays()*ONE_DAY_IN_MILLISECONDS)) {
                     paging.setLastPage(true);
                     break;
                 }
@@ -643,7 +643,7 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setType(getCommitType(CollectionUtils.size(parentShas), message));
             commits.add(commit);
 
-            if(commit.getScmCommitTimestamp() < (System.currentTimeMillis()- (long) settings.getFirstRunHistoryDays()*24*60*60*1000)) {
+            if(commit.getScmCommitTimestamp() < (System.currentTimeMillis()- (long) settings.getFirstRunHistoryDays()*ONE_DAY_IN_MILLISECONDS)) {
                 paging.setLastPage(true);
                 break;
             }
