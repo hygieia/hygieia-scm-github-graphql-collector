@@ -33,7 +33,6 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
@@ -157,8 +156,7 @@ public class DefaultGitHubClient implements GitHubClient {
         String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey());
         boolean alldone = false;
 
-        GitHubPaging dummyPRPaging = new GitHubPaging();
-        dummyPRPaging.setLastPage(false);
+        GitHubPaging dummyPRPaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingPRMap, "pull", firstRun);
         GitHubPaging dummyIssuePaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingIssueMap, "issue", firstRun);
         GitHubPaging dummyCommitPaging = new GitHubPaging();
         dummyCommitPaging.setLastPage(false);
@@ -172,7 +170,7 @@ public class DefaultGitHubClient implements GitHubClient {
             if (data != null) {
                 JSONObject repository = (JSONObject) data.get("repository");
 
-                GitHubPaging pullPaging = processPullRequest((JSONObject) repository.get("pullRequests"), repo, existingPRMap, historyTimeStamp);
+                GitHubPaging pullPaging = processPullRequest((JSONObject) repository.get("pullRequests"), repo, existingPRMap);
                 LOG.debug("--- Processed " + pullPaging.getCurrentCount() + " of total " + pullPaging.getTotalCount() + " pull requests");
 
                 GitHubPaging issuePaging = processIssues((JSONObject) repository.get("issues"), gitHubParsed, existingIssueMap, historyTimeStamp);
@@ -489,7 +487,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     @SuppressWarnings({"PMD.NPathComplexity"})
-    private GitHubPaging processPullRequest(JSONObject pullObject, GitHubRepo repo, Map<Long, String> prMap, long historyTimeStamp) throws MalformedURLException, HygieiaException {
+    private GitHubPaging processPullRequest(JSONObject pullObject, GitHubRepo repo, Map<Long, String> prMap) throws MalformedURLException, HygieiaException {
         GitHubPaging paging = new GitHubPaging();
         paging.setLastPage(true);
         if (pullObject == null) return paging;
@@ -568,15 +566,19 @@ public class DefaultGitHubClient implements GitHubClient {
             }
             pull.setTargetBranch(str(node, "baseRefName"));
             pull.setTargetRepo(!Objects.equals("", gitHubParsed.getOrgName()) ? gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName() : gitHubParsed.getRepoName());
-            boolean prExists = (pull.getUpdatedAt() < historyTimeStamp) ||
-                    ((!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber())));
-            if (prExists) {
-                pullRequests.add(pull);
-            }
-            localCount++;
 
-            if(pull.getScmCommitTimestamp() < (System.currentTimeMillis()- FOURTEEN_DAYS_IN_MILLISECONDS)) {
+            boolean stop = (!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber()));
+            if (stop) {
+                LOG.debug("------ Skipping pull request processing. History check is met OR Found matching entry in existing pull requests. Pull Request#" + pull.getNumber());
                 paging.setLastPage(true);
+                break;
+            }else{
+                localCount++;
+                pullRequests.add(pull);
+                if(pull.getUpdatedAt() < (System.currentTimeMillis() - (long) settings.getFirstRunHistoryDays()*24*60*60*1000)) {
+                    paging.setLastPage(true);
+                    break;
+                }
             }
         }
         paging.setCurrentCount(localCount);
@@ -641,8 +643,9 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setType(getCommitType(CollectionUtils.size(parentShas), message));
             commits.add(commit);
 
-            if(commit.getScmCommitTimestamp() < (System.currentTimeMillis()- FOURTEEN_DAYS_IN_MILLISECONDS)) {
+            if(commit.getScmCommitTimestamp() < (System.currentTimeMillis()- (long) settings.getFirstRunHistoryDays()*24*60*60*1000)) {
                 paging.setLastPage(true);
+                break;
             }
         }
         return paging;
