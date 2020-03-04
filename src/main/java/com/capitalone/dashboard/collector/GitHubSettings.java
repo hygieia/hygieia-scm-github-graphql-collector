@@ -13,7 +13,8 @@ import java.util.List;
 @ConfigurationProperties(prefix = "github")
 public class GitHubSettings {
 	private String cron;
-	private String host;
+	@Value("${github.graphqlUrl}")
+    private String graphqlUrl;
 	private String key;
 	@Value("${github.firstRunHistoryDays:14}")
 	private int firstRunHistoryDays;
@@ -50,14 +51,6 @@ public class GitHubSettings {
 	private String proxyUser;
 
 	private String proxyPassword;
-
-	public String getHost() {
-		return host;
-	}
-
-	public void setHost(String host) {
-		this.host = host;
-	}
 
 	public String getCron() {
 		return cron;
@@ -178,4 +171,9 @@ public class GitHubSettings {
 	public String getProxyPassword() { return proxyPassword; }
 
 	public void setProxyPassword(String proxyPassword) { this.proxyPassword = proxyPassword; }
+
+	public String getGraphqlUrl() { return graphqlUrl; }
+
+	public void setGraphqlUrl(String graphqlUrl) { this.graphqlUrl = graphqlUrl; }
+
 }

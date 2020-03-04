@@ -1079,7 +1079,9 @@ public class DefaultGitHubClient implements GitHubClient {
 
     // Makes use of the graphQL endpoint, will not work for REST api
     private JSONObject getDataFromRestCallPost(GitHubParsed gitHubParsed, GitHubRepo repo, String password, String personalAccessToken, JSONObject query) throws MalformedURLException, HygieiaException {
-        ResponseEntity<String> response = makeRestCallPost(gitHubParsed.getGraphQLUrl(), repo.getUserId(), password, personalAccessToken, query);
+        String graphqlUrl = gitHubParsed.getGraphQLUrl();
+        if(StringUtils.isNotEmpty(settings.getGraphqlUrl())) { graphqlUrl = settings.getGraphqlUrl(); }
+        ResponseEntity<String> response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
         JSONObject data = (JSONObject) parseAsObject(response).get("data");
         JSONArray errors = getArray(parseAsObject(response), "errors");
         HttpHeaders headers = response.getHeaders();
