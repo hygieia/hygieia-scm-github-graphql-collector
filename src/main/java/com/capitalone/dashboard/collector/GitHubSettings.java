@@ -14,7 +14,7 @@ import java.util.List;
 public class GitHubSettings {
 	private String cron;
     private String graphqlUrl;
-    private String ldapApiUrl;
+    private String baseApiUrl;
 	private String key;
 	@Value("${github.firstRunHistoryDays:14}")
 	private int firstRunHistoryDays;
@@ -176,8 +176,8 @@ public class GitHubSettings {
 
 	public void setGraphqlUrl(String graphqlUrl) { this.graphqlUrl = graphqlUrl; }
 
-	public String getLdapUrl() { return ldapApiUrl; }
+	public String getBaseApiUrl() { return baseApiUrl; }
 
-	public void setLdapUrl(String ldapApiUrl) { this.ldapApiUrl = ldapApiUrl; }
+	public void setBaseApiUrl(String baseApiUrl) { this.baseApiUrl = baseApiUrl; }
 
 }

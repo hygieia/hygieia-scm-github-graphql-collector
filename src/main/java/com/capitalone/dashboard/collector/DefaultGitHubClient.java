@@ -1000,8 +1000,8 @@ public class DefaultGitHubClient implements GitHubClient {
         try {
             GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
             String apiUrl = gitHubParsed.getBaseApiUrl();
-            if(StringUtils.isNotEmpty(settings.getLdapUrl())) {
-                apiUrl = settings.getLdapUrl();
+            if(StringUtils.isNotEmpty(settings.getBaseApiUrl())) {
+                apiUrl = settings.getBaseApiUrl();
             }
             String queryUrl = apiUrl.concat("users/").concat(formattedUser);
 
