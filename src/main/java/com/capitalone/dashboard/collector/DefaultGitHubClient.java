@@ -1000,7 +1000,9 @@ public class DefaultGitHubClient implements GitHubClient {
         try {
             GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
             String apiUrl = gitHubParsed.getBaseApiUrl();
-
+            if(StringUtils.isNotEmpty(settings.getBaseApiUrl())) {
+                apiUrl = settings.getBaseApiUrl();
+            }
             String queryUrl = apiUrl.concat("users/").concat(formattedUser);
 
             ResponseEntity<String> response = makeRestCallGet(queryUrl);

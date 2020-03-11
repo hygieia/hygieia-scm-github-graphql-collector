@@ -13,8 +13,8 @@ import java.util.List;
 @ConfigurationProperties(prefix = "github")
 public class GitHubSettings {
 	private String cron;
-	@Value("${github.graphqlUrl}")
     private String graphqlUrl;
+    private String baseApiUrl;
 	private String key;
 	@Value("${github.firstRunHistoryDays:14}")
 	private int firstRunHistoryDays;
@@ -175,5 +175,9 @@ public class GitHubSettings {
 	public String getGraphqlUrl() { return graphqlUrl; }
 
 	public void setGraphqlUrl(String graphqlUrl) { this.graphqlUrl = graphqlUrl; }
+
+	public String getBaseApiUrl() { return baseApiUrl; }
+
+	public void setBaseApiUrl(String baseApiUrl) { this.baseApiUrl = baseApiUrl; }
 
 }
