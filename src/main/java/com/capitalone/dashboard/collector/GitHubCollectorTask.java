@@ -303,7 +303,9 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         List<Commit> orphanSaveList = orphanCommits.stream().filter(c -> !StringUtils.isEmpty(c.getPullNumber())).collect(Collectors.toList());
         orphanSaveList.forEach( c -> LOG.info( "Updating orphan " + c.getScmRevisionNumber() + " " +
                 new DateTime(c.getScmCommitTimestamp()).toString("yyyy-MM-dd hh:mm:ss.SSa") + " with pull " + c.getPullNumber()));
+        long start = System.currentTimeMillis();
         commitRepository.save(orphanSaveList);
+        LOG.info("-- Saved Orphan Commits= " + orphanSaveList.size() + "; Duration= " + (System.currentTimeMillis()-start) + " milliseconds");
     }
 
     /**
