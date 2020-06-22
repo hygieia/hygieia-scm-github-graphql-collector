@@ -93,7 +93,7 @@ public class DefaultGitHubClientTest {
                 eq(null), eq(String.class)))
                 .thenReturn(new ResponseEntity<>("", HttpStatus.OK));
         String ldapUser = defaultGitHubClient.getLDAPDN(getGitRepo(),user);
-        assertEquals(ldapUser, "");
+        assertEquals(ldapUser, null);
         assertEquals(defaultGitHubClient.getLdapMap().containsKey(user), false);
     }
 

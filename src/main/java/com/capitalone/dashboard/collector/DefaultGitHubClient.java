@@ -3,12 +3,12 @@ package com.capitalone.dashboard.collector;
 import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.client.RestUserInfo;
 import com.capitalone.dashboard.misc.HygieiaException;
+import com.capitalone.dashboard.model.AuthorType;
 import com.capitalone.dashboard.model.CollectionMode;
 import com.capitalone.dashboard.model.Comment;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.CommitStatus;
 import com.capitalone.dashboard.model.CommitType;
-
 import com.capitalone.dashboard.model.GitHubPaging;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
@@ -20,6 +20,7 @@ import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.Encryption;
 import com.capitalone.dashboard.util.EncryptionException;
 import com.capitalone.dashboard.util.GithubGraphQLQuery;
+
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -71,6 +72,7 @@ public class DefaultGitHubClient implements GitHubClient {
     private List<GitRequest> pullRequests;
     private List<GitRequest> issues;
     private Map<String, String> ldapMap;
+    private Map<String, AuthorType> authorTypeMap;
     private final List<Pattern> commitExclusionPatterns = new ArrayList<>();
 
 
@@ -137,6 +139,10 @@ public class DefaultGitHubClient implements GitHubClient {
         return ldapMap;
     }
 
+    protected  void setAuthorTypeMap(Map<String, AuthorType> authorTypeMap) { this.authorTypeMap = authorTypeMap; }
+
+    protected Map<String, AuthorType> getAuthorTypeMap() { return authorTypeMap; }
+
     @Override
     @SuppressWarnings("PMD.ExcessiveMethodLength")
     public void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> existingIssueMap) throws RestClientException, MalformedURLException, HygieiaException {
@@ -149,6 +155,7 @@ public class DefaultGitHubClient implements GitHubClient {
         pullRequests = new LinkedList<>();
         issues = new LinkedList<>();
         ldapMap = new HashMap<>();
+        authorTypeMap = new HashMap<>();
         long historyTimeStamp = getTimeStampMills(getRunDate(repo, firstRun, false));
 
         String decryptedPassword = decryptString(repo.getPassword(), settings.getKey());
@@ -551,7 +558,8 @@ public class DefaultGitHubClient implements GitHubClient {
                 if (mergeEvent != null) {
                     pull.setScmMergeEventRevisionNumber(mergeEvent.getMergeSha());
                     pull.setMergeAuthor(mergeEvent.getMergeAuthor());
-                    pull.setMergeAuthorLDAPDN(mergeEvent.getMergeAuthorLDAPDN());
+                    pull.setMergeAuthorLDAPDN(getLDAPDN(repo, pull.getMergeAuthor()));
+                    pull.setMergeAuthorType(getAuthorType(repo, pull.getMergeAuthor()));
                 }
             }
             // commit etc details
@@ -631,9 +639,8 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setScmRevisionNumber(sha);
             commit.setScmAuthor(authorName);
             commit.setScmAuthorLogin(authorLogin);
-            if (!StringUtils.isEmpty(authorLDAPDN)) {
-                commit.setScmAuthorLDAPDN(authorLDAPDN);
-            }
+            commit.setScmAuthorType(getAuthorType(repo, authorLogin));
+            commit.setScmAuthorLDAPDN(authorLDAPDN);
             commit.setScmCommitLog(message);
             commit.setScmCommitTimestamp(getTimeStampMills(str(authorJSON, "date")));
             commit.setNumberOfChanges(changedFiles+deletions+additions);
@@ -746,10 +753,8 @@ public class DefaultGitHubClient implements GitHubClient {
             Comment comment = new Comment();
             comment.setBody(str(node, "bodyText"));
             comment.setUser(str((JSONObject) node.get("author"), "login"));
-            String userLDAP = getLDAPDN(repo, comment.getUser());
-            if (!StringUtils.isEmpty(userLDAP)) {
-                comment.setUserLDAPDN(userLDAP);
-            }
+            comment.setUserType(getAuthorType(repo, comment.getUser()));
+            comment.setUserLDAPDN(getLDAPDN(repo, comment.getUser()));
             comment.setCreatedAt(getTimeStampMills(str(node, "createdAt")));
             comment.setUpdatedAt(getTimeStampMills(str(node, "updatedAt")));
             comment.setStatus(str(node, "state"));
@@ -782,10 +787,8 @@ public class DefaultGitHubClient implements GitHubClient {
             JSONObject authorUserJSON = (JSONObject) author.get("user");
             newCommit.setScmAuthor(str(author, "name"));
             newCommit.setScmAuthorLogin(authorUserJSON == null ? "unknown" : str(authorUserJSON, "login"));
-            String authorLDAPDN = "unknown".equalsIgnoreCase(newCommit.getScmAuthorLogin()) ? null : getLDAPDN(repo, newCommit.getScmAuthorLogin());
-            if (!StringUtils.isEmpty(authorLDAPDN)) {
-                newCommit.setScmAuthorLDAPDN(authorLDAPDN);
-            }
+            newCommit.setScmAuthorType(getAuthorType(repo, newCommit.getScmAuthorLogin()));
+            newCommit.setScmAuthorLDAPDN(getLDAPDN(repo, newCommit.getScmAuthorLogin()));
             newCommit.setScmCommitTimestamp(getTimeStampMills(str(author, "date")));
             JSONObject statusObj = (JSONObject) commit.get("status");
 
@@ -865,10 +868,8 @@ public class DefaultGitHubClient implements GitHubClient {
             review.setBody(str(node, "bodyText"));
             JSONObject authorObj = (JSONObject) node.get("author");
             review.setAuthor(str(authorObj, "login"));
-            String authorLDAPDN = getLDAPDN(repo, review.getAuthor());
-            if (!StringUtils.isEmpty(authorLDAPDN)) {
-                review.setAuthorLDAPDN(authorLDAPDN);
-            }
+            review.setAuthorType(getAuthorType(repo, review.getAuthor()));
+            review.setAuthorLDAPDN(getLDAPDN(repo, review.getAuthor()));
             review.setCreatedAt(getTimeStampMills(str(node, "createdAt")));
             review.setUpdatedAt(getTimeStampMills(str(node, "updatedAt")));
             reviews.add(review);
@@ -900,10 +901,8 @@ public class DefaultGitHubClient implements GitHubClient {
                         JSONObject author = (JSONObject) node.get("actor");
                         if (author != null) {
                             mergeEvent.setMergeAuthor(str(author, "login"));
-                            String mergeAuthorLDAPDN = getLDAPDN(repo, mergeEvent.getMergeAuthor());
-                            if (!StringUtils.isEmpty(mergeAuthorLDAPDN)) {
-                                mergeEvent.setMergeAuthorLDAPDN(mergeAuthorLDAPDN);
-                            }
+                            mergeEvent.setMergeAuthorType(getAuthorType(repo, mergeEvent.getMergeAuthor()));
+                            mergeEvent.setMergeAuthorLDAPDN(getLDAPDN(repo, mergeEvent.getMergeAuthor()));
                         }
                         return mergeEvent;
                     }
@@ -988,34 +987,51 @@ public class DefaultGitHubClient implements GitHubClient {
         return rateLimit;
     }
 
-    @Override
-    public String getLDAPDN(GitHubRepo repo, String user) {
-        if (StringUtils.isEmpty(user)) return null;
-        //This is weird. Github does replace the _ in commit author with - in the user api!!!
-        String formattedUser = user.replace("_", "-");
-        if (ldapMap.get(formattedUser) != null) {
-            return ldapMap.get(formattedUser);
-        }
+    private void getUser(GitHubRepo repo, String user) {
         String repoUrl = (String) repo.getOptions().get("url");
         try {
             GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
             String apiUrl = gitHubParsed.getBaseApiUrl();
-            if(StringUtils.isNotEmpty(settings.getBaseApiUrl())) {
+            if (StringUtils.isNotEmpty(settings.getBaseApiUrl())) {
                 apiUrl = settings.getBaseApiUrl();
             }
-            String queryUrl = apiUrl.concat("users/").concat(formattedUser);
-
+            String queryUrl = apiUrl.concat("users/").concat(user);
             ResponseEntity<String> response = makeRestCallGet(queryUrl);
-            JSONObject jsonObject = parseAsObject(response);
-            String ldapDN = str(jsonObject, "ldap_dn");
-            if (!StringUtils.isEmpty(ldapDN)) {
-                ldapMap.put(formattedUser, ldapDN);
+            JSONObject userObject = parseAsObject(response);
+            String ldapDN = str(userObject, "ldap_dn");
+            String authorTypeStr = str(userObject, "type");
+            if (StringUtils.isNotEmpty(ldapDN)) {
+                ldapMap.put(user, ldapDN);
             }
-            return str(jsonObject, "ldap_dn");
+            if (StringUtils.isNotEmpty(authorTypeStr)) {
+                authorTypeMap.put(user, AuthorType.fromString(authorTypeStr));
+            }
         } catch (MalformedURLException | HygieiaException | RestClientException e) {
             LOG.error("Error getting LDAP_DN For user " + user, e);
         }
-        return null;
+    }
+
+    @Override
+    public String getLDAPDN(GitHubRepo repo, String user) {
+        if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
+        //This is weird. Github does replace the _ in commit author with - in the user api!!!
+        String formattedUser = user.replace("_", "-");
+        if(ldapMap.containsKey(formattedUser)) {
+            return ldapMap.get(formattedUser);
+        }
+        this.getUser(repo, formattedUser);
+        return ldapMap.get(formattedUser);
+    }
+
+    private AuthorType getAuthorType(GitHubRepo repo, String user) {
+        if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
+        //This is weird. Github does replace the _ in commit author with - in the user api!!!
+        String formattedUser = user.replace("_", "-");
+        if(authorTypeMap.containsKey(formattedUser)) {
+            return authorTypeMap.get(formattedUser);
+        }
+        this.getUser(repo, formattedUser);
+        return authorTypeMap.get(formattedUser);
     }
 
     /// Utility Methods
