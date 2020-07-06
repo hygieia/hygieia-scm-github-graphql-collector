@@ -5,7 +5,7 @@ public class MergeEvent {
     private String gitRequestNumber;
     private String mergeRef;
     private String mergeAuthor;
-    private AuthorType mergeAuthorType;
+    private String mergeAuthorType;
     private String mergeAuthorLDAPDN;
     private long mergedAt;
 
@@ -41,9 +41,9 @@ public class MergeEvent {
         this.mergeAuthor = mergeAuthor;
     }
 
-    public AuthorType getMergeAuthorType() { return mergeAuthorType; }
+    public String getMergeAuthorType() { return mergeAuthorType; }
 
-    public void setMergeAuthorType(AuthorType mergeAuthorType) { this.mergeAuthorType = mergeAuthorType; }
+    public void setMergeAuthorType(String mergeAuthorType) { this.mergeAuthorType = mergeAuthorType; }
 
     public String getMergeAuthorLDAPDN() {
         return mergeAuthorLDAPDN;
