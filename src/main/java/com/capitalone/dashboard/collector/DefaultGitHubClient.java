@@ -3,7 +3,6 @@ package com.capitalone.dashboard.collector;
 import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.client.RestUserInfo;
 import com.capitalone.dashboard.misc.HygieiaException;
-import com.capitalone.dashboard.model.AuthorType;
 import com.capitalone.dashboard.model.CollectionMode;
 import com.capitalone.dashboard.model.Comment;
 import com.capitalone.dashboard.model.Commit;
@@ -72,7 +71,7 @@ public class DefaultGitHubClient implements GitHubClient {
     private List<GitRequest> pullRequests;
     private List<GitRequest> issues;
     private Map<String, String> ldapMap;
-    private Map<String, AuthorType> authorTypeMap;
+    private Map<String, String> authorTypeMap;
     private final List<Pattern> commitExclusionPatterns = new ArrayList<>();
 
 
@@ -139,9 +138,9 @@ public class DefaultGitHubClient implements GitHubClient {
         return ldapMap;
     }
 
-    protected  void setAuthorTypeMap(Map<String, AuthorType> authorTypeMap) { this.authorTypeMap = authorTypeMap; }
+    protected  void setAuthorTypeMap(Map<String, String > authorTypeMap) { this.authorTypeMap = authorTypeMap; }
 
-    protected Map<String, AuthorType> getAuthorTypeMap() { return authorTypeMap; }
+    protected Map<String, String> getAuthorTypeMap() { return authorTypeMap; }
 
     @Override
     @SuppressWarnings("PMD.ExcessiveMethodLength")
@@ -558,8 +557,14 @@ public class DefaultGitHubClient implements GitHubClient {
                 if (mergeEvent != null) {
                     pull.setScmMergeEventRevisionNumber(mergeEvent.getMergeSha());
                     pull.setMergeAuthor(mergeEvent.getMergeAuthor());
-                    pull.setMergeAuthorLDAPDN(getLDAPDN(repo, pull.getMergeAuthor()));
-                    pull.setMergeAuthorType(getAuthorType(repo, pull.getMergeAuthor()));
+                    String authorType = getAuthorType(repo, pull.getMergeAuthor());
+                    String authorLDAPDN = getLDAPDN(repo, pull.getMergeAuthor());
+                    if (StringUtils.isNotEmpty(authorType)) {
+                        pull.setMergeAuthorType(authorType);
+                    }
+                    if (StringUtils.isNotEmpty(authorLDAPDN)) {
+                        pull.setMergeAuthorLDAPDN(authorLDAPDN);
+                    }
                 }
             }
             // commit etc details
@@ -753,8 +758,14 @@ public class DefaultGitHubClient implements GitHubClient {
             Comment comment = new Comment();
             comment.setBody(str(node, "bodyText"));
             comment.setUser(str((JSONObject) node.get("author"), "login"));
-            comment.setUserType(getAuthorType(repo, comment.getUser()));
-            comment.setUserLDAPDN(getLDAPDN(repo, comment.getUser()));
+            String userType = getAuthorType(repo, comment.getUser());
+            String userLDAPDN = getLDAPDN(repo, comment.getUser());
+            if (StringUtils.isNotEmpty(userType)) {
+                comment.setUserType(userType);
+            }
+            if (StringUtils.isNotEmpty(userLDAPDN)) {
+                comment.setUserLDAPDN(userLDAPDN);
+            }
             comment.setCreatedAt(getTimeStampMills(str(node, "createdAt")));
             comment.setUpdatedAt(getTimeStampMills(str(node, "updatedAt")));
             comment.setStatus(str(node, "state"));
@@ -787,8 +798,14 @@ public class DefaultGitHubClient implements GitHubClient {
             JSONObject authorUserJSON = (JSONObject) author.get("user");
             newCommit.setScmAuthor(str(author, "name"));
             newCommit.setScmAuthorLogin(authorUserJSON == null ? "unknown" : str(authorUserJSON, "login"));
-            newCommit.setScmAuthorType(getAuthorType(repo, newCommit.getScmAuthorLogin()));
-            newCommit.setScmAuthorLDAPDN(getLDAPDN(repo, newCommit.getScmAuthorLogin()));
+            String authorType = getAuthorType(repo, newCommit.getScmAuthorLogin());
+            String authorLDAPDN = getLDAPDN(repo, newCommit.getScmAuthorLogin());
+            if (StringUtils.isNotEmpty(authorType)) {
+                newCommit.setScmAuthorType(authorType);
+            }
+            if (StringUtils.isNotEmpty(authorLDAPDN)) {
+                newCommit.setScmAuthorLDAPDN(authorLDAPDN);
+            }
             newCommit.setScmCommitTimestamp(getTimeStampMills(str(author, "date")));
             JSONObject statusObj = (JSONObject) commit.get("status");
 
@@ -868,8 +885,14 @@ public class DefaultGitHubClient implements GitHubClient {
             review.setBody(str(node, "bodyText"));
             JSONObject authorObj = (JSONObject) node.get("author");
             review.setAuthor(str(authorObj, "login"));
-            review.setAuthorType(getAuthorType(repo, review.getAuthor()));
-            review.setAuthorLDAPDN(getLDAPDN(repo, review.getAuthor()));
+            String authorType = getAuthorType(repo, review.getAuthor());
+            String authorLDAPDN = getLDAPDN(repo, review.getAuthor());
+            if (StringUtils.isNotEmpty(authorType)) {
+                review.setAuthorType(authorType);
+            }
+            if (StringUtils.isNotEmpty(authorLDAPDN)) {
+                review.setAuthorLDAPDN(authorLDAPDN);
+            }
             review.setCreatedAt(getTimeStampMills(str(node, "createdAt")));
             review.setUpdatedAt(getTimeStampMills(str(node, "updatedAt")));
             reviews.add(review);
@@ -901,8 +924,14 @@ public class DefaultGitHubClient implements GitHubClient {
                         JSONObject author = (JSONObject) node.get("actor");
                         if (author != null) {
                             mergeEvent.setMergeAuthor(str(author, "login"));
-                            mergeEvent.setMergeAuthorType(getAuthorType(repo, mergeEvent.getMergeAuthor()));
-                            mergeEvent.setMergeAuthorLDAPDN(getLDAPDN(repo, mergeEvent.getMergeAuthor()));
+                            String authorType = getAuthorType(repo, mergeEvent.getMergeAuthor());
+                            String authorLDAPDN = getLDAPDN(repo, mergeEvent.getMergeAuthor());
+                            if (StringUtils.isNotEmpty(authorType)) {
+                                mergeEvent.setMergeAuthorType(authorType);
+                            }
+                            if (StringUtils.isNotEmpty(authorLDAPDN)) {
+                                mergeEvent.setMergeAuthorLDAPDN(authorLDAPDN);
+                            }
                         }
                         return mergeEvent;
                     }
@@ -1004,7 +1033,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 ldapMap.put(user, ldapDN);
             }
             if (StringUtils.isNotEmpty(authorTypeStr)) {
-                authorTypeMap.put(user, AuthorType.fromString(authorTypeStr));
+                authorTypeMap.put(user, authorTypeStr);
             }
         } catch (MalformedURLException | HygieiaException | RestClientException e) {
             LOG.error("Error getting LDAP_DN For user " + user, e);
@@ -1023,7 +1052,7 @@ public class DefaultGitHubClient implements GitHubClient {
         return ldapMap.get(formattedUser);
     }
 
-    private AuthorType getAuthorType(GitHubRepo repo, String user) {
+    private String getAuthorType(GitHubRepo repo, String user) {
         if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
         //This is weird. Github does replace the _ in commit author with - in the user api!!!
         String formattedUser = user.replace("_", "-");
