@@ -45,6 +45,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -150,10 +152,42 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         gitHubRepoRepository.save(repoList);
     }
 
+   private boolean getRepoUrlInfo (String url){
 
-    @Override
+       if(url == null && url.length() == 0){
+           return false;
+       }
+       try {
+           int index = url.indexOf(".com/");
+           String text = index != -1 ? url.substring(index + 5, index + 6) : url.substring(0, 1);
+           String regex = gitHubSettings.getMultipleAccount();
+           Pattern pattern = Pattern.compile(regex);
+           Matcher matcher = pattern.matcher(text);
+
+           if (matcher.find()) {
+               return true;
+           }
+       }catch (Exception ex){
+           return true;
+       }
+       return false;
+
+   }
+
+
+   @Override
+   public void collect(Collector collector){
+       setupProxy();
+       clean(collector);
+       List<GitHubRepo> enabledRepos = enabledRepos(collector);
+       List<GitHubRepo> enabledReposMatcher = enabledRepos.stream().filter(repo -> getRepoUrlInfo(repo.getRepoUrl())).collect(Collectors.toList());
+       collectProcess(collector, enabledReposMatcher );
+   }
+
+
+
     @SuppressWarnings({"PMD.AvoidDeeplyNestedIfStmts"})
-    public void collect(Collector collector) {
+    public void collectProcess(Collector collector, List<GitHubRepo> enabledRepos) {
 
         logBanner("Starting...");
         long start = System.currentTimeMillis();
@@ -162,10 +196,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         int pullCount = 0;
         int issueCount = 0;
 
-        setupProxy();
-
-        clean(collector);
-        List<GitHubRepo> enabledRepos = enabledRepos(collector);
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
         LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
         for (GitHubRepo repo : enabledRepos) {
@@ -265,6 +295,8 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
     }
+
+
 
     private String readableAge(long lastUpdated, long start) {
         if (lastUpdated<=0) return "never before";
@@ -384,6 +416,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         repos.sort(Comparator.comparing(GitHubRepo::getLastUpdated));
 
         LOG.info("# of collections: " + repos.size());
+        System.out.println("enabledRepos  :  " + repos);
         return repos;
     }
 
@@ -392,3 +425,4 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 repo.getId(), commit.getScmRevisionNumber()) == null;
     }
 }
+

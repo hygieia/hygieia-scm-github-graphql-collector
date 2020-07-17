@@ -36,6 +36,8 @@ public class GitHubSettings {
 	@Value("${github.fetchCount:50}")
 	private int fetchCount;
 
+	private String multipleAccount;
+
 	private String personalAccessToken;
 
 	@Value("${github.connectTimeout:20000}")
@@ -180,4 +182,11 @@ public class GitHubSettings {
 
 	public void setBaseApiUrl(String baseApiUrl) { this.baseApiUrl = baseApiUrl; }
 
+	public String getMultipleAccount() {
+		return multipleAccount;
+	}
+
+	public void setMultipleAccount(String multipleAccount) {
+		this.multipleAccount = multipleAccount;
+	}
 }
