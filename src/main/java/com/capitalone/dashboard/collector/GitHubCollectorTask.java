@@ -415,7 +415,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
         repos.sort(Comparator.comparing(GitHubRepo::getLastUpdated));
 
-        LOG.info("# of collections: " + repos.size());
         System.out.println("enabledRepos  :  " + repos);
         return repos;
     }
