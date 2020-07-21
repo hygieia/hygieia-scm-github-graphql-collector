@@ -101,6 +101,87 @@ public class GitHubCollectorTaskTest {
 
 
     @Test
+    public void collect_testCollect_repoNameMatcher() throws MalformedURLException, HygieiaException {
+        when(dbComponentRepository.findAll()).thenReturn(components());
+        Set<ObjectId> gitID = new HashSet<>();
+        gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
+        when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
+
+        Collector collector = new Collector();
+        collector.setEnabled(true);
+        collector.setName("collector");
+        collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
+
+        when(gitHubRepoRepository.findEnabledGitHubRepos(collector.getId())).thenReturn(getEnabledRepos());
+
+        when(gitRequestRepository.findNonMergedRequestNumberAndLastUpdated(any())).thenReturn(new ArrayList<>());
+        when(gitHubSettings.getErrorThreshold()).thenReturn(1);
+        when(gitHubSettings.getSearchCriteria()).thenReturn("repoName|[n-zN-Z]");
+
+
+        when(gitHubClient.isUnderRateLimit()).thenReturn(true);
+        when(gitHubClient.getCommits()).thenReturn(getCommits());
+
+        when(commitRepository.findByCollectorItemIdAndScmRevisionNumber(
+                repo1.getId(), "1")).thenReturn(null);
+
+        when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+        task.collect(collector);
+
+        //verify that orphaned repo is disabled
+        assertEquals("repo2.no.collectoritem", repo2.getNiceName());
+        assertEquals(false, repo2.isEnabled());
+
+        //verify that repo1 is enabled
+        assertEquals("repo1-ci1", repo1.getNiceName());
+        assertEquals(true, repo1.isEnabled());
+
+        //verify that save is called once for the commit item
+        Mockito.verify(commitRepository, times(1)).save(commit);
+    }
+
+    @Test
+    public void collect_testCollect_orgNameMatcher() throws MalformedURLException, HygieiaException {
+        when(dbComponentRepository.findAll()).thenReturn(components());
+        Set<ObjectId> gitID = new HashSet<>();
+        gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
+        when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
+
+        Collector collector = new Collector();
+        collector.setEnabled(true);
+        collector.setName("collector");
+        collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
+
+        when(gitHubRepoRepository.findEnabledGitHubRepos(collector.getId())).thenReturn(getEnabledRepos());
+
+        when(gitRequestRepository.findNonMergedRequestNumberAndLastUpdated(any())).thenReturn(new ArrayList<>());
+        when(gitHubSettings.getErrorThreshold()).thenReturn(1);
+        when(gitHubSettings.getSearchCriteria()).thenReturn("orgName|[a-nA-N]");
+
+
+        when(gitHubClient.isUnderRateLimit()).thenReturn(true);
+        when(gitHubClient.getCommits()).thenReturn(getCommits());
+
+        when(commitRepository.findByCollectorItemIdAndScmRevisionNumber(
+                repo1.getId(), "1")).thenReturn(null);
+
+        when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+        task.collect(collector);
+
+        //verify that orphaned repo is disabled
+        assertEquals("repo2.no.collectoritem", repo2.getNiceName());
+        assertEquals(false, repo2.isEnabled());
+
+        //verify that repo1 is enabled
+        assertEquals("repo1-ci1", repo1.getNiceName());
+        assertEquals(true, repo1.isEnabled());
+
+        //verify that save is called once for the commit item
+        Mockito.verify(commitRepository, times(1)).save(commit);
+    }
+
+
+    @Test
     public void collect_testCollect_with_Threshold_0() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
 

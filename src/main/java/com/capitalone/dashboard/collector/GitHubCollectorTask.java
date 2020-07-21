@@ -16,6 +16,7 @@ import com.capitalone.dashboard.repository.ComponentRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.repository.GitRequestRepository;
 import com.capitalone.dashboard.util.CommitPullMatcher;
+import com.capitalone.dashboard.util.GithubRepoMatcher;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
@@ -36,7 +37,6 @@ import java.net.MalformedURLException;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,7 +45,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -64,6 +63,9 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     private final GitHubSettings gitHubSettings;
     private final ComponentRepository dbComponentRepository;
     private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * 24 * 60 * 60 * 1000;
+    private static final String REPO_NAME = "repoName";
+    private static final String ORG_NAME = "orgName";
+
 
     @Autowired
     public GitHubCollectorTask(TaskScheduler taskScheduler,
@@ -152,36 +154,21 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         gitHubRepoRepository.save(repoList);
     }
 
-   private boolean getRepoUrlInfo (String url){
-
-       if(url == null && url.length() == 0){
-           return false;
-       }
-       try {
-           int index = url.indexOf(".com/");
-           String text = index != -1 ? url.substring(index + 5, index + 6) : url.substring(0, 1);
-           String regex = gitHubSettings.getMultipleAccount();
-           Pattern pattern = Pattern.compile(regex);
-           Matcher matcher = pattern.matcher(text);
-
-           if (matcher.find()) {
-               return true;
-           }
-       }catch (Exception ex){
-           return true;
-       }
-       return false;
-
-   }
-
 
    @Override
    public void collect(Collector collector){
        setupProxy();
        clean(collector);
        List<GitHubRepo> enabledRepos = enabledRepos(collector);
-       List<GitHubRepo> enabledReposMatcher = enabledRepos.stream().filter(repo -> getRepoUrlInfo(repo.getRepoUrl())).collect(Collectors.toList());
-       collectProcess(collector, enabledReposMatcher );
+       if(gitHubSettings.getSearchCriteria() != null){
+           String searchCriteria[] = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
+           if(REPO_NAME.equalsIgnoreCase(searchCriteria[0])){
+               enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.repoNameMatcher(repo.getRepoUrl(),searchCriteria[1])).collect(Collectors.toList());
+           }else if(ORG_NAME.equalsIgnoreCase(searchCriteria[0])) {
+               enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.orgNameMatcher(repo.getRepoUrl(), searchCriteria[1])).collect(Collectors.toList());
+           }
+       }
+       collectProcess(collector, enabledRepos );
    }
 
 
