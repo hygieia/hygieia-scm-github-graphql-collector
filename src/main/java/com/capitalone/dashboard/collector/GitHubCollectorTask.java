@@ -16,6 +16,7 @@ import com.capitalone.dashboard.repository.ComponentRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.repository.GitRequestRepository;
 import com.capitalone.dashboard.util.CommitPullMatcher;
+import com.capitalone.dashboard.util.GithubRepoMatcher;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
@@ -36,7 +37,6 @@ import java.net.MalformedURLException;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -62,6 +63,9 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     private final GitHubSettings gitHubSettings;
     private final ComponentRepository dbComponentRepository;
     private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * 24 * 60 * 60 * 1000;
+    private static final String REPO_NAME = "repoName";
+    private static final String ORG_NAME = "orgName";
+
 
     @Autowired
     public GitHubCollectorTask(TaskScheduler taskScheduler,
@@ -151,9 +155,26 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     }
 
 
-    @Override
+   @Override
+   public void collect(Collector collector){
+       setupProxy();
+       clean(collector);
+       List<GitHubRepo> enabledRepos = enabledRepos(collector);
+       if(gitHubSettings.getSearchCriteria() != null){
+           String searchCriteria[] = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
+           if(REPO_NAME.equalsIgnoreCase(searchCriteria[0])){
+               enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.repoNameMatcher(repo.getRepoUrl(),searchCriteria[1])).collect(Collectors.toList());
+           }else if(ORG_NAME.equalsIgnoreCase(searchCriteria[0])) {
+               enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.orgNameMatcher(repo.getRepoUrl(), searchCriteria[1])).collect(Collectors.toList());
+           }
+       }
+       collectProcess(collector, enabledRepos );
+   }
+
+
+
     @SuppressWarnings({"PMD.AvoidDeeplyNestedIfStmts"})
-    public void collect(Collector collector) {
+    public void collectProcess(Collector collector, List<GitHubRepo> enabledRepos) {
 
         logBanner("Starting...");
         long start = System.currentTimeMillis();
@@ -162,10 +183,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         int pullCount = 0;
         int issueCount = 0;
 
-        setupProxy();
-
-        clean(collector);
-        List<GitHubRepo> enabledRepos = enabledRepos(collector);
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
         LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
         for (GitHubRepo repo : enabledRepos) {
@@ -265,6 +282,8 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
     }
+
+
 
     private String readableAge(long lastUpdated, long start) {
         if (lastUpdated<=0) return "never before";
@@ -392,3 +411,4 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 repo.getId(), commit.getScmRevisionNumber()) == null;
     }
 }
+
