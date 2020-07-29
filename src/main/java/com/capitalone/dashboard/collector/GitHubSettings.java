@@ -36,6 +36,8 @@ public class GitHubSettings {
 	@Value("${github.fetchCount:50}")
 	private int fetchCount;
 
+	private String searchCriteria;
+
 	private String personalAccessToken;
 
 	@Value("${github.connectTimeout:20000}")
@@ -180,4 +182,12 @@ public class GitHubSettings {
 
 	public void setBaseApiUrl(String baseApiUrl) { this.baseApiUrl = baseApiUrl; }
 
+
+	public String getSearchCriteria() {
+		return searchCriteria;
+	}
+
+	public void setSearchCriteria(String searchCriteria) {
+		this.searchCriteria = searchCriteria;
+	}
 }
