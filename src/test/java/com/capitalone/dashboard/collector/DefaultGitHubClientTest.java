@@ -1,11 +1,12 @@
 package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.client.RestClient;
+import com.capitalone.dashboard.client.RestClientSettings;
+import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.collector.DefaultGitHubClient.RedirectedStatus;
-import com.capitalone.dashboard.util.Supplier;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,7 +28,9 @@ import static org.mockito.Mockito.when;
 public class DefaultGitHubClientTest {
 
     @Mock
-    private Supplier<RestOperations> restOperationsSupplier;
+    private RestOperationsSupplier restOperationsSupplier;
+    @Mock
+    private RestClientSettings restClientSettings;
     @Mock private RestOperations rest;
     private GitHubSettings settings;
     private DefaultGitHubClient defaultGitHubClient;
@@ -35,9 +38,9 @@ public class DefaultGitHubClientTest {
 
     @Before
     public void init() {
-        when(restOperationsSupplier.get()).thenReturn(rest);
+        when(restOperationsSupplier.get(restClientSettings)).thenReturn(rest);
         settings = new GitHubSettings();
-        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier));
+        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier, restClientSettings));
         defaultGitHubClient.setLdapMap(new HashMap<>());
 
     }
