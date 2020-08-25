@@ -1,6 +1,7 @@
 package com.capitalone.dashboard.collector;
 
 
+import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.CollectionError;
@@ -45,6 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -65,6 +67,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * 24 * 60 * 60 * 1000;
     private static final String REPO_NAME = "repoName";
     private static final String ORG_NAME = "orgName";
+    private AtomicInteger count = new AtomicInteger(0);
 
 
     @Autowired
@@ -171,6 +174,10 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
        collectProcess(collector, enabledRepos );
    }
 
+    @Override
+    public int getCount() {
+        return count.get();
+    }
 
 
     @SuppressWarnings({"PMD.AvoidDeeplyNestedIfStmts"})
@@ -182,6 +189,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         int commitCount = 0;
         int pullCount = 0;
         int issueCount = 0;
+        count.set(0);
 
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
         LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
@@ -279,6 +287,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         }
         long end = System.currentTimeMillis();
         long elapsedSeconds = (end - start) / 1000;
+        count.set(commitCount);
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
     }
