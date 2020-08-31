@@ -50,7 +50,7 @@
     <repository.name>hygieia-scm-github-graphql-collector</repository.name>
     <apache.rat.plugin.version>0.13</apache.rat.plugin.version>
     <bc.version>3.0.1</bc.version>
-    <com.capitalone.dashboard.core.version>3.7.24</com.capitalone.dashboard.core.version>
+    <com.capitalone.dashboard.core.version>3.9.5</com.capitalone.dashboard.core.version>
     <commons.codec.version>1.14</commons.codec.version>
     <commons.io.version>2.4</commons.io.version>
     <commons.lang.version>3.10</commons.lang.version>

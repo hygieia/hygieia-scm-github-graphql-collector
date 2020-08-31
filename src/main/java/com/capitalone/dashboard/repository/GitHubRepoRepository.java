@@ -10,4 +10,7 @@ public interface GitHubRepoRepository extends BaseCollectorItemRepository<GitHub
 
     @Query(value="{ 'collectorId' : ?0, enabled: true}")
     List<GitHubRepo> findEnabledGitHubRepos(ObjectId collectorId);
+
+    @Query(value="{ 'collectorId' : ?0, options.url : ?1}")
+    List<GitHubRepo> findByCollectorIdAndUrl(ObjectId collectorId, String url);
 }
