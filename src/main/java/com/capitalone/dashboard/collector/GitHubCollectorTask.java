@@ -168,23 +168,22 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.orgNameMatcher(repo.getRepoUrl(), searchCriteria[1])).collect(Collectors.toList());
            }
        }
+       LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
+       LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
        collectProcess(collector, enabledRepos );
+
    }
 
 
 
     @SuppressWarnings({"PMD.AvoidDeeplyNestedIfStmts"})
     public void collectProcess(Collector collector, List<GitHubRepo> enabledRepos) {
-
-        logBanner("Starting...");
         long start = System.currentTimeMillis();
         int repoCount = 0;
         int commitCount = 0;
         int pullCount = 0;
         int issueCount = 0;
 
-        LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
-        LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
         for (GitHubRepo repo : enabledRepos) {
             repoCount++;
             String repoUrl = repo==null?"null":(repo.getRepoUrl() + "/tree/" + repo.getBranch());
@@ -281,6 +280,8 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         long elapsedSeconds = (end - start) / 1000;
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
+
+        collector.setLastExecutionRecordCount(repoCount+pullCount+commitCount+issueCount);
     }
 
 

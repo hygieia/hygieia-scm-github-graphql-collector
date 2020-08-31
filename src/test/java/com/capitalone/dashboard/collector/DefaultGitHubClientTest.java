@@ -1,11 +1,11 @@
 package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.client.RestClient;
+import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.collector.DefaultGitHubClient.RedirectedStatus;
-import com.capitalone.dashboard.util.Supplier;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 public class DefaultGitHubClientTest {
 
     @Mock
-    private Supplier<RestOperations> restOperationsSupplier;
+    private RestOperationsSupplier restOperationsSupplier;
     @Mock private RestOperations rest;
     private GitHubSettings settings;
     private DefaultGitHubClient defaultGitHubClient;
