@@ -25,7 +25,6 @@ import static org.springframework.web.bind.annotation.RequestMethod.GET;
 
 @RestController
 @Validated
-@RequestMapping("/github")
 public class GitHubController {
     private static final Log LOG = LogFactory.getLog(GitHubController.class);
 
