@@ -186,6 +186,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
         for (GitHubRepo repo : enabledRepos) {
             repoCount++;
+            long repoStart = System.currentTimeMillis();
             String repoUrl = repo==null?"null":(repo.getRepoUrl() + "/tree/" + repo.getBranch());
             String statusString = "UNKNOWN";
             long lastUpdated = repo==null?0:repo.getLastUpdated();
@@ -237,7 +238,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                         repo.setLastUpdated(System.currentTimeMillis());
                         // if everything went alright, there should be no error!
                         repo.getErrors().clear();
-                        statusString = "SUCCESS, pulls=" + pullCount1 + ", commits=" + pullCount1 + ", issues=" + issueCount1;
+                        statusString = "SUCCESS, pulls=" + pullCount1 + ", commits=" + commitCount1 + ", issues=" + issueCount1;
                     } catch (HttpStatusCodeException hc) {
                         LOG.error("Error fetching commits for:" + repo.getRepoUrl(), hc);
                         statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
@@ -271,9 +272,10 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 LOG.error("Unexpected exception when collecting url=" + repoUrl, e);
             } finally {
                 String age = readableAge(lastUpdated, start);
-                LOG.info(String.format("%d of %d, repository=%s, lastUpdated=%d [%s], status=%s",
-                        repoCount, enabledRepos.size(), repoUrl, lastUpdated, age, statusString));
-
+                long repoEnd = System.currentTimeMillis();
+                long repoProcSeconds = (repoEnd - repoStart) / 1000;
+                LOG.info(String.format("%d of %d, repository=%s, itemProcessSeconds=%d, lastUpdated=%d [%s], status=%s",
+                        repoCount, enabledRepos.size(), repoUrl, repoProcSeconds, lastUpdated, age, statusString));
             }
         }
         long end = System.currentTimeMillis();
