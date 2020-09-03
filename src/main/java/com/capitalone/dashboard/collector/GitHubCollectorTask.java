@@ -174,11 +174,6 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
        collectProcess(collector, enabledRepos );
    }
 
-    @Override
-    public int getCount() {
-        return count.get();
-    }
-
 
     @SuppressWarnings({"PMD.AvoidDeeplyNestedIfStmts"})
     public void collectProcess(Collector collector, List<GitHubRepo> enabledRepos) {

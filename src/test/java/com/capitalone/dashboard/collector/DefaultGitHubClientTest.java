@@ -1,7 +1,6 @@
 package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.client.RestClient;
-import com.capitalone.dashboard.client.RestClientSettings;
 import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.GitHubRepo;
@@ -29,8 +28,6 @@ public class DefaultGitHubClientTest {
 
     @Mock
     private RestOperationsSupplier restOperationsSupplier;
-    @Mock
-    private RestClientSettings restClientSettings;
     @Mock private RestOperations rest;
     private GitHubSettings settings;
     private DefaultGitHubClient defaultGitHubClient;
@@ -38,9 +35,9 @@ public class DefaultGitHubClientTest {
 
     @Before
     public void init() {
-        when(restOperationsSupplier.get(restClientSettings)).thenReturn(rest);
+        when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new GitHubSettings();
-        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier, restClientSettings));
+        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier));
         defaultGitHubClient.setLdapMap(new HashMap<>());
 
     }
