@@ -275,9 +275,9 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 LOG.error("Unexpected exception when collecting url=" + repoUrl, e);
             } finally {
                 String age = readableAge(lastUpdated, start);
-                long timeTaken = System.currentTimeMillis() - repoStart;
-                LOG.info(String.format("%d of %d, repository=%s, timeTaken=%d lastUpdated=%d [%s], status=%s",
-                        repoCount, enabledRepos.size(), repoUrl, timeTaken, lastUpdated, age, statusString));
+                long itemProcessTime = System.currentTimeMillis() - repoStart;
+                LOG.info(String.format("%d of %d, repository=%s, itemProcessTime=%d lastUpdated=%d [%s], status=%s",
+                        repoCount, enabledRepos.size(), repoUrl, itemProcessTime, lastUpdated, age, statusString));
             }
         }
         long end = System.currentTimeMillis();
