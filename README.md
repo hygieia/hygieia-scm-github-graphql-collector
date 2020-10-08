@@ -133,7 +133,6 @@ The sample `application.properties` lists parameter values to configure the GitH
 	github.fetchCount=
 	github.searchCriteria=
 ```
-**Note**: For information on generating your GitHub key for private repos, refer to [Encryption of Private Repos](../collectors.md#encryption-for-private-repos).
 
 ## Run collector with Docker
 
