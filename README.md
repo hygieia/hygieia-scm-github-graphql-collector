@@ -100,9 +100,18 @@ The sample `application.properties` lists parameter values to configure the GitH
 	github.cron=0 0/5 * * * *
 
 	github.host=github.com
+	
+	github.firstRunHistoryDays=
+	github.rateLimitThreshold=
+	github.graphqlUrl=baseurl/api/graphql
+	github.baseApiUrl=baseurl/api/v3
 
 	# Maximum number of previous days from current date, when fetching commits
 	github.commitThresholdDays=15
+	
+	# A filter of commits with subject containing the pattern that will be filtered
+	github.notBuiltCommits[0]=
+	github.notBuiltCommits[1]=
 
 	# Optional: Error threshold count after which collector stops collecting for a collector item. Default is 2.
 	github.errorThreshold=1
@@ -118,6 +127,11 @@ The sample `application.properties` lists parameter values to configure the GitH
 
 	# Github repository Read Timeout value in milliseconds, default value is 20000 (20s) 
 	github.readTimeout=
+	
+	github.commitPullSyncTime=
+	github.offsetMinutes=
+	github.fetchCount=
+	github.searchCriteria=
 ```
 **Note**: For information on generating your GitHub key for private repos, refer to [Encryption of Private Repos](../collectors.md#encryption-for-private-repos).
 
