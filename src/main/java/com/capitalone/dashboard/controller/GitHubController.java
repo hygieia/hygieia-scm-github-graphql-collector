@@ -60,4 +60,20 @@ public class GitHubController {
                         + " Records updated: " + collector.getLastExecutionRecordCount());
     }
 
+
+    @RequestMapping(value = "/cleanup", method = GET, produces = APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> cleanup() throws HygieiaException {
+        Collector collector = collectorRepository.findByName(GITHUB_COLLECTOR_NAME);
+        if (Objects.isNull(collector))
+            return ResponseEntity.status(HttpStatus.OK).body(GITHUB_COLLECTOR_NAME + " collector is not found");
+        List<GitHubRepo> repos = gitHubRepoRepository.findObsoleteGitHubRepos(collector.getId());
+        if (CollectionUtils.isEmpty(repos))
+            return ResponseEntity.status(HttpStatus.OK).body("No more Obsolete GitHub repo found");
+        int count = repos.size();
+        gitHubRepoRepository.delete(repos);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(GITHUB_COLLECTOR_NAME + " cleanup - " + count + " Obsolete GitHub repo's deleted. ");
+    }
 }
