@@ -202,7 +202,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                     LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
                     // add 0.2 second delay
                     statusString = "SKIPPED, rateLimit exceeded, sleep for 0.2s";
-                    sleep(200);
+                    sleep(gitHubSettings.getWaitTime());
                 } else {
                     try {
                         List<GitRequest> allRequests = gitRequestRepository.findRequestNumberAndLastUpdated(repo.getId());

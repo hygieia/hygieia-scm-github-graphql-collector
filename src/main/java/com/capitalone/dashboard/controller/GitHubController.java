@@ -6,6 +6,7 @@ import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
+import com.capitalone.dashboard.service.GitHubService;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -31,15 +32,18 @@ public class GitHubController {
     private final BaseCollectorRepository<Collector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
     private final GitHubCollectorTask gitHubCollectorTask;
+    private final GitHubService gitHubService;
     private static final String GITHUB_COLLECTOR_NAME = "GitHub";
 
     @Autowired
     public GitHubController(BaseCollectorRepository<Collector> collectorRepository,
                             GitHubRepoRepository gitHubRepoRepository,
-                            GitHubCollectorTask gitHubCollectorTask) {
+                            GitHubCollectorTask gitHubCollectorTask,
+                            GitHubService gitHubService) {
         this.collectorRepository = collectorRepository;
         this.gitHubRepoRepository = gitHubRepoRepository;
         this.gitHubCollectorTask = gitHubCollectorTask;
+        this.gitHubService = gitHubService;
     }
 
     @RequestMapping(value = "/refresh", method = GET, produces = APPLICATION_JSON_VALUE)
@@ -63,17 +67,6 @@ public class GitHubController {
 
     @RequestMapping(value = "/cleanup", method = GET, produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<String> cleanup() throws HygieiaException {
-        Collector collector = collectorRepository.findByName(GITHUB_COLLECTOR_NAME);
-        if (Objects.isNull(collector))
-            return ResponseEntity.status(HttpStatus.OK).body(GITHUB_COLLECTOR_NAME + " collector is not found");
-        List<GitHubRepo> repos = gitHubRepoRepository.findObsoleteGitHubRepos(collector.getId());
-        if (CollectionUtils.isEmpty(repos))
-            return ResponseEntity.status(HttpStatus.OK).body("No more Obsolete GitHub repo found");
-        int count = repos.size();
-        gitHubRepoRepository.delete(repos);
-
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(GITHUB_COLLECTOR_NAME + " cleanup - " + count + " Obsolete GitHub repo's deleted. ");
+        return gitHubService.cleanup();
     }
 }
