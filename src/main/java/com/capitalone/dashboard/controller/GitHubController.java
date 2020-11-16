@@ -6,6 +6,7 @@ import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
+import com.capitalone.dashboard.service.GitHubService;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -31,15 +32,18 @@ public class GitHubController {
     private final BaseCollectorRepository<Collector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
     private final GitHubCollectorTask gitHubCollectorTask;
+    private final GitHubService gitHubService;
     private static final String GITHUB_COLLECTOR_NAME = "GitHub";
 
     @Autowired
     public GitHubController(BaseCollectorRepository<Collector> collectorRepository,
                             GitHubRepoRepository gitHubRepoRepository,
-                            GitHubCollectorTask gitHubCollectorTask) {
+                            GitHubCollectorTask gitHubCollectorTask,
+                            GitHubService gitHubService) {
         this.collectorRepository = collectorRepository;
         this.gitHubRepoRepository = gitHubRepoRepository;
         this.gitHubCollectorTask = gitHubCollectorTask;
+        this.gitHubService = gitHubService;
     }
 
     @RequestMapping(value = "/refresh", method = GET, produces = APPLICATION_JSON_VALUE)
@@ -60,4 +64,9 @@ public class GitHubController {
                         + " Records updated: " + collector.getLastExecutionRecordCount());
     }
 
+
+    @RequestMapping(value = "/cleanup", method = GET, produces = APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> cleanup() throws HygieiaException {
+        return gitHubService.cleanup();
+    }
 }

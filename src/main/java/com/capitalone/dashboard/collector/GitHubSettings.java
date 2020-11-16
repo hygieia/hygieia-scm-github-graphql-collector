@@ -22,7 +22,9 @@ public class GitHubSettings {
 	@Value("${github.errorThreshold:2}")
 	private int errorThreshold;
 	@Value("${github.errorResetWindow:3600000}")
-	private int errorResetWindow;
+	private int errorResetWindow;  // default reset window = 1 hour
+	@Value("${github.waitTime:300}")
+	private int waitTime;
 	@Value("${github.rateLimitThreshold:10}")
 	private int rateLimitThreshold;
 	// GitHub Enterprise does not have ratelimit
@@ -89,6 +91,10 @@ public class GitHubSettings {
 	public int getErrorThreshold() {
 		return errorThreshold;
 	}
+
+	public int getWaitTime() { return waitTime; }
+
+	public void setWaitTime(int waitTime) { this.waitTime = waitTime; }
 
 	public void setErrorThreshold(int errorThreshold) {
 		this.errorThreshold = errorThreshold;
