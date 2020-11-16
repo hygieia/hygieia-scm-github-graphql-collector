@@ -200,8 +200,8 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                     statusString = "SKIPPED, errorThreshold exceeded";
                 } else if (!gitHubClient.isUnderRateLimit()) {
                     LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
-                    // add 0.2 second delay
-                    statusString = "SKIPPED, rateLimit exceeded, sleep for 0.2s";
+                    // add wait time (default = 0.3s)
+                    statusString = "SKIPPED, rateLimit exceeded, sleep for " + gitHubSettings.getWaitTime();
                     sleep(gitHubSettings.getWaitTime());
                 } else {
                     try {
