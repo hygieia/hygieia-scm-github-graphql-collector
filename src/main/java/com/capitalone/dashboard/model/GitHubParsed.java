@@ -52,6 +52,17 @@ public class GitHubParsed {
             baseApiUrl = protocol + "://" + PUBLIC_GITHUB_BASE_API;
             apiUrl = protocol + "://" + PUBLIC_GITHUB_REPO_HOST + path;
             graphQLUrl = protocol + "://" + PUBLIC_GITHUB_GRAPHQL;
+        } else if (parts.length>3) {
+            orgName = parts[parts.length-2];
+            repoName = parts[parts.length-1];
+            String baseUrl = protocol + "://" + host;
+            if (u.getPort()>0) baseUrl += ":" + u.getPort();
+            for (int i=1; i<parts.length-2; i++) {
+                baseUrl += "/" + parts[i];
+            }
+            apiUrl = baseUrl + SEGMENT_API + "/" + orgName + "/" + repoName;
+            baseApiUrl = baseUrl + BASE_API;
+            graphQLUrl = baseUrl + SEGMENT_GRAPHQL;
         } else {
             apiUrl = protocol + "://" + host + SEGMENT_API + path;
             baseApiUrl = protocol + "://" + host + BASE_API;
