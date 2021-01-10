@@ -1,14 +1,16 @@
 package com.capitalone.dashboard.collector;
 
 
-import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.BaseModel;
+import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectionError;
 import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.CollectorItem;
 import com.capitalone.dashboard.model.CollectorType;
 import com.capitalone.dashboard.model.Commit;
+import com.capitalone.dashboard.model.GitHubCollector;
+import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
@@ -18,7 +20,6 @@ import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.repository.GitRequestRepository;
 import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.GithubRepoMatcher;
-import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -35,7 +36,6 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
 import java.net.MalformedURLException;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -47,6 +47,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -54,17 +55,18 @@ import java.util.stream.Collectors;
  * CollectorTask that fetches Commit information from GitHub
  */
 @Component
-public class GitHubCollectorTask extends CollectorTask<Collector> {
+public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
     private static final Log LOG = LogFactory.getLog(GitHubCollectorTask.class);
 
-    private final BaseCollectorRepository<Collector> collectorRepository;
+    private final BaseCollectorRepository<GitHubCollector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
     private final CommitRepository commitRepository;
     private final GitRequestRepository gitRequestRepository;
     private final GitHubClient gitHubClient;
     private final GitHubSettings gitHubSettings;
     private final ComponentRepository dbComponentRepository;
-    private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * 24 * 60 * 60 * 1000;
+    private static final long ONE_DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
+    private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * ONE_DAY_MILLISECONDS;
     private static final String REPO_NAME = "repoName";
     private static final String ORG_NAME = "orgName";
     private AtomicInteger count = new AtomicInteger(0);
@@ -72,7 +74,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
 
     @Autowired
     public GitHubCollectorTask(TaskScheduler taskScheduler,
-                               BaseCollectorRepository<Collector> collectorRepository,
+                               BaseCollectorRepository<GitHubCollector> collectorRepository,
                                GitHubRepoRepository gitHubRepoRepository,
                                CommitRepository commitRepository,
                                GitRequestRepository gitRequestRepository,
@@ -90,8 +92,10 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     }
 
     @Override
-    public Collector getCollector() {
-        Collector protoType = new Collector();
+    public GitHubCollector getCollector() {
+        GitHubCollector existingCollector = collectorRepository.findByName("GitHub");
+
+        GitHubCollector protoType = new GitHubCollector();
         protoType.setName("GitHub");
         protoType.setCollectorType(CollectorType.SCM);
         protoType.setOnline(true);
@@ -109,11 +113,19 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         uniqueOptions.put(GitHubRepo.REPO_URL, "");
         uniqueOptions.put(GitHubRepo.BRANCH, "");
         protoType.setUniqueFields(uniqueOptions);
+
+        if (existingCollector != null) {
+            protoType.setLastPrivateRepoCollectionTimestamp(existingCollector.getLastPrivateRepoCollectionTimestamp());
+            protoType.setLastCleanUpTimestamp(existingCollector.getLastCleanUpTimestamp());
+            protoType.setLastExecutionRecordCount(existingCollector.getLastExecutionRecordCount());
+            protoType.setLatestProcessedEventId((existingCollector).getLatestProcessedEventId());
+            protoType.setLatestProcessedEventTimestamp((existingCollector).getLatestProcessedEventTimestamp());
+        }
         return protoType;
     }
 
     @Override
-    public BaseCollectorRepository<Collector> getCollectorRepository() {
+    public BaseCollectorRepository<GitHubCollector> getCollectorRepository() {
         return collectorRepository;
     }
 
@@ -128,7 +140,11 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
      * @param collector the {@link Collector}
      */
     @SuppressWarnings("PMD.AvoidDeeplyNestedIfStmts") // agreed, fixme
-    private void clean(Collector collector) {
+    private void clean(GitHubCollector collector) {
+        // clean up once a day
+        if ((System.currentTimeMillis() - collector.getLastCleanUpTimestamp()) < ONE_DAY_MILLISECONDS) {
+            return;
+        }
         Set<ObjectId> uniqueIDs = new HashSet<>();
         /*
           Logic: For each component, retrieve the collector item list of the type SCM.
@@ -150,36 +166,65 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(collector.getId());
         gitHubRepoRepository.findByCollectorIdIn(gitID).stream().filter(Objects::nonNull).forEach(repo -> {
-            if (repo.isPushed()) {return;}
+            if (repo.isPushed()) {
+                return;
+            }
             repo.setEnabled(uniqueIDs.contains(repo.getId()));
             repoList.add(repo);
         });
         gitHubRepoRepository.save(repoList);
+        collector.setLastCleanUpTimestamp(System.currentTimeMillis());
     }
 
 
-   @Override
-   public void collect(Collector collector){
-       setupProxy();
-       clean(collector);
-       List<GitHubRepo> enabledRepos = enabledRepos(collector);
-       if(gitHubSettings.getSearchCriteria() != null){
-           String searchCriteria[] = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
-           if(REPO_NAME.equalsIgnoreCase(searchCriteria[0])){
-               enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.repoNameMatcher(repo.getRepoUrl(),searchCriteria[1])).collect(Collectors.toList());
-           }else if(ORG_NAME.equalsIgnoreCase(searchCriteria[0])) {
-               enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.orgNameMatcher(repo.getRepoUrl(), searchCriteria[1])).collect(Collectors.toList());
-           }
-       }
-       LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
-       LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
-       collectProcess(collector, enabledRepos );
+    @Override
+    public void collect(GitHubCollector collector) {
+        setupProxy();
+        clean(collector);
+        List<GitHubRepo> enabledRepos = enabledRepos(collector);
+        Set<GitHubRepo> changedRepos = reposToCollect(collector, enabledRepos);
+        if (gitHubSettings.getSearchCriteria() != null) {
+            String[] searchCriteria = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
+            if (REPO_NAME.equalsIgnoreCase(searchCriteria[0])) {
+                enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.repoNameMatcher(repo.getRepoUrl(), searchCriteria[1])).collect(Collectors.toList());
+            } else if (ORG_NAME.equalsIgnoreCase(searchCriteria[0])) {
+                enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.orgNameMatcher(repo.getRepoUrl(), searchCriteria[1])).collect(Collectors.toList());
+            }
+        }
+        LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
+        LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
+        collectProcess(collector, new ArrayList<>(changedRepos));
+        collectorRepository.save(collector);
+    }
 
-   }
+    private Set<GitHubRepo> reposToCollect(GitHubCollector collector, List<GitHubRepo> enabledRepos) {
+        Set<GitHubRepo> repoSet = new HashSet<>();
+        try {
+            ChangeRepoResponse changeRepoResponse = gitHubClient.getChangedRepos(collector.getLatestProcessedEventId(), collector.getLatestProcessedEventTimestamp());
+            Set<GitHubParsed> changeRepos = changeRepoResponse.getChangeRepos();
+            Map<String, GitHubParsed> changedReposMap = changeRepos.stream().collect(Collectors.toMap(GitHubParsed::getUrl, Function.identity()));
 
+            repoSet = enabledRepos.stream().filter(e -> changedReposMap.containsKey(e.getRepoUrl().toLowerCase()) && !e.isPushed()).collect(Collectors.toSet());
+            collector.setLatestProcessedEventId(changeRepoResponse.getLatestEventId());
+            collector.setLatestProcessedEventTimestamp(changeRepoResponse.getLatestEventTimestamp());
+            if ((System.currentTimeMillis() - collector.getLastPrivateRepoCollectionTimestamp() > gitHubSettings.getPrivateRepoCollectionTime())) {
+                Set<GitHubRepo> privateRepos = enabledRepos
+                        .stream()
+                        .filter(e -> !StringUtils.isEmpty(e.getPassword()) && !StringUtils.isEmpty(e.getUserId()))
+                        .collect(Collectors.toSet());
+
+                repoSet.addAll(privateRepos);
+                collector.setLastPrivateRepoCollectionTimestamp(System.currentTimeMillis());
+            }
+            return repoSet;
+        } catch (MalformedURLException | HygieiaException e) {
+            LOG.error("Error fetching changed repos:", e);
+        }
+        return repoSet;
+    }
 
     @SuppressWarnings({"PMD.AvoidDeeplyNestedIfStmts"})
-    public void collectProcess(Collector collector, List<GitHubRepo> enabledRepos) {
+    public void collectProcess(Collector collector, List<GitHubRepo> reposToCollect) {
         long start = System.currentTimeMillis();
         int repoCount = 0;
         int commitCount = 0;
@@ -187,14 +232,16 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         int issueCount = 0;
         count.set(0);
 
-        for (GitHubRepo repo : enabledRepos) {
+
+        for (GitHubRepo repo : reposToCollect) {
             repoCount++;
             long repoStart = System.currentTimeMillis();
-            String repoUrl = repo==null?"null":(repo.getRepoUrl() + "/tree/" + repo.getBranch());
+            String repoUrl = repo == null ? "null" : (repo.getRepoUrl() + "/tree/" + repo.getBranch());
             String statusString = "UNKNOWN";
-            long lastUpdated = repo==null?0:repo.getLastUpdated();
+            long lastUpdated = repo == null ? 0 : repo.getLastUpdated();
             try {
-                if (repo==null) throw new HygieiaException("Repository returned from github is null", HygieiaException.BAD_DATA);
+                if (repo == null)
+                    throw new HygieiaException("Repository returned from github is null", HygieiaException.BAD_DATA);
                 boolean firstRun = ((repo.getLastUpdated() == 0) || ((start - repo.getLastUpdated()) > FOURTEEN_DAYS_MILLISECONDS));
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
                     statusString = "SKIPPED, errorThreshold exceeded";
@@ -247,13 +294,13 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                         statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
                         CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
                         if (hc.getStatusCode() == HttpStatus.UNAUTHORIZED || hc.getStatusCode() == HttpStatus.FORBIDDEN) {
-                            LOG.error("Received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody="+hc.getResponseBodyAsString());
+                            LOG.error("Received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody=" + hc.getResponseBodyAsString());
                             int retryAfterSeconds = NumberUtils.toInt(hc.getResponseHeaders().get(DefaultGitHubClient.RETRY_AFTER).get(0));
                             long startSleeping = System.currentTimeMillis();
-                            LOG.info("Should Retry-After: " + retryAfterSeconds + " sec. Start sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa") );
-                            sleep(retryAfterSeconds*1000L);
+                            LOG.info("Should Retry-After: " + retryAfterSeconds + " sec. Start sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
+                            sleep(retryAfterSeconds * 1000L);
                             long endSleeping = System.currentTimeMillis();
-                            LOG.info("Waking up after [" + (endSleeping-startSleeping)/1000L + "] sec, " +
+                            LOG.info("Waking up after [" + (endSleeping - startSleeping) / 1000L + "] sec, " +
                                     "at: " + new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
                         }
                         repo.getErrors().add(error);
@@ -277,7 +324,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 String age = readableAge(lastUpdated, start);
                 long itemProcessTime = System.currentTimeMillis() - repoStart;
                 LOG.info(String.format("%d of %d, repository=%s, itemProcessTime=%d lastUpdated=%d [%s], status=%s",
-                        repoCount, enabledRepos.size(), repoUrl, itemProcessTime, lastUpdated, age, statusString));
+                        repoCount, reposToCollect.size(), repoUrl, itemProcessTime, lastUpdated, age, statusString));
             }
         }
         long end = System.currentTimeMillis();
@@ -286,16 +333,15 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         LOG.info(String.format("GitHubCollectorTask:collect stop, totalProcessSeconds=%d, totalRepoCount=%d, totalNewPulls=%d, totalNewCommits=%d totalNewIssues=%d",
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
 
-        collector.setLastExecutionRecordCount(repoCount+pullCount+commitCount+issueCount);
+        collector.setLastExecutionRecordCount(repoCount + pullCount + commitCount + issueCount);
     }
 
 
-
-    private String readableAge(long lastUpdated, long start) {
-        if (lastUpdated<=0) return "never before";
-        else if (start-lastUpdated>48*3600000) return ((start-lastUpdated)/(24*3600000)) + " days ago";
-        else if (start-lastUpdated>2*3600000) return ((start-lastUpdated)/3600000) + " hours ago";
-        else return ((start-lastUpdated)/60000) + " minutes ago";
+    private static String readableAge(long lastUpdated, long start) {
+        if (lastUpdated <= 0) return "never before";
+        else if (start - lastUpdated > 48 * 3600000) return ((start - lastUpdated) / (24 * 3600000)) + " days ago";
+        else if (start - lastUpdated > 2 * 3600000) return ((start - lastUpdated) / 3600000) + " hours ago";
+        else return ((start - lastUpdated) / 60000) + " minutes ago";
     }
 
     private void setupProxy() {
@@ -326,11 +372,11 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         List<GitRequest> pulls = gitRequestRepository.findByCollectorItemIdAndMergedAtIsBetween(repo.getId(), refTime, System.currentTimeMillis());
         orphanCommits = CommitPullMatcher.matchCommitToPulls(orphanCommits, pulls);
         List<Commit> orphanSaveList = orphanCommits.stream().filter(c -> !StringUtils.isEmpty(c.getPullNumber())).collect(Collectors.toList());
-        orphanSaveList.forEach( c -> LOG.info( "Updating orphan " + c.getScmRevisionNumber() + " " +
+        orphanSaveList.forEach(c -> LOG.info("Updating orphan " + c.getScmRevisionNumber() + ' ' +
                 new DateTime(c.getScmCommitTimestamp()).toString("yyyy-MM-dd hh:mm:ss.SSa") + " with pull " + c.getPullNumber()));
         long start = System.currentTimeMillis();
         commitRepository.save(orphanSaveList);
-        LOG.info("-- Saved Orphan Commits= " + orphanSaveList.size() + "; Duration= " + (System.currentTimeMillis()-start) + " milliseconds");
+        LOG.info("-- Saved Orphan Commits= " + orphanSaveList.size() + "; Duration= " + (System.currentTimeMillis() - start) + " milliseconds");
     }
 
     /**
@@ -345,15 +391,15 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         long start = System.currentTimeMillis();
         if (existingCount == 0) {
             List<Commit> newCommits = gitHubClient.getCommits();
-            for(Commit c : newCommits) {
+            for (Commit c : newCommits) {
                 c.setCollectorItemId(repo.getId());
-                if(commitRepository.save(c) != null) {
+                if (commitRepository.save(c) != null) {
                     count++;
                 }
             }
         } else {
             Collection<Commit> nonDupCommits = gitHubClient.getCommits().stream()
-                    .<Map<String, Commit>> collect(HashMap::new,(m,c)->m.put(c.getScmRevisionNumber(), c), Map::putAll)
+                    .<Map<String, Commit>>collect(HashMap::new, (m, c) -> m.put(c.getScmRevisionNumber(), c), Map::putAll)
                     .values();
             for (Commit commit : nonDupCommits) {
                 LOG.debug(commit.getTimestamp() + ":::" + commit.getScmCommitLog());
@@ -364,7 +410,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
                 }
             }
         }
-        LOG.info("-- Saved Commits = " + count + "; Duration = " + (System.currentTimeMillis()-start) + " milliseconds");
+        LOG.info("-- Saved Commits = " + count + "; Duration = " + (System.currentTimeMillis() - start) + " milliseconds");
         return count;
     }
 
@@ -396,7 +442,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
             }
             gitRequestRepository.save(entry);
         }
-        LOG.info("-- Saved " + type  + ":" + count + (isPull? (" " + pullNumbers):""));
+        LOG.info("-- Saved " + type + ':' + count + (isPull ? (" " + pullNumbers) : ""));
         return count;
     }
 
@@ -404,13 +450,16 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
     private List<GitHubRepo> enabledRepos(Collector collector) {
         List<GitHubRepo> repos = gitHubRepoRepository.findEnabledGitHubRepos(collector.getId());
 
-        if (CollectionUtils.isEmpty(repos)) { return new ArrayList<>(); }
+        if (CollectionUtils.isEmpty(repos)) {
+            return new ArrayList<>();
+        }
 
         repos.sort(Comparator.comparing(GitHubRepo::getLastUpdated));
 
         LOG.info("# of collections: " + repos.size());
         return repos;
     }
+
 
     private boolean isNewCommit(GitHubRepo repo, Commit commit) {
         return commitRepository.findByCollectorItemIdAndScmRevisionNumber(
