@@ -246,9 +246,9 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                 if (!repo.checkErrorOrReset(gitHubSettings.getErrorResetWindow(), gitHubSettings.getErrorThreshold())) {
                     statusString = "SKIPPED, errorThreshold exceeded";
                 } else if (!gitHubClient.isUnderRateLimit()) {
-                    LOG.error("GraphQL API rate limit reached after " + (System.currentTimeMillis() - start) / 1000 + " seconds since start. Stopping processing");
+                    LOG.error(String.format("GraphQL API rate limit reached after %d seconds since start. Stopping processing", (System.currentTimeMillis() - start) / 1000));
                     // add wait time (default = 0.3s)
-                    statusString = "SKIPPED, rateLimit exceeded, sleep for " + gitHubSettings.getWaitTime();
+                    statusString = String.format("SKIPPED, rateLimit exceeded, sleep for %d", gitHubSettings.getWaitTime());
                     sleep(gitHubSettings.getWaitTime());
                 } else {
                     try {
@@ -288,38 +288,37 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                         repo.setLastUpdated(System.currentTimeMillis());
                         // if everything went alright, there should be no error!
                         repo.getErrors().clear();
-                        statusString = "SUCCESS, pulls=" + pullCount1 + ", commits=" + commitCount1 + ", issues=" + issueCount1;
+                        statusString = String.format("SUCCESS, pulls=%d, commits=%d, issues=%d", pullCount1, commitCount1, issueCount1);
                     } catch (HttpStatusCodeException hc) {
-                        LOG.error("Error fetching commits for:" + repo.getRepoUrl(), hc);
-                        statusString = "EXCEPTION, " + hc.getClass().getCanonicalName();
+                        LOG.error(String.format("Error fetching commits for:%s", repo.getRepoUrl()), hc);
+                        statusString = String.format("EXCEPTION, %s", hc.getClass().getCanonicalName());
                         CollectionError error = new CollectionError(hc.getStatusCode().toString(), hc.getMessage());
                         if (hc.getStatusCode() == HttpStatus.UNAUTHORIZED || hc.getStatusCode() == HttpStatus.FORBIDDEN) {
-                            LOG.error("Received 401/403 HttpStatusCodeException from GitHub. Status code=" + hc.getStatusCode() + " ResponseBody=" + hc.getResponseBodyAsString());
+                            LOG.error(String.format("Received 401/403 HttpStatusCodeException from GitHub. Status code=%s ResponseBody=%s", hc.getStatusCode(), hc.getResponseBodyAsString()));
                             int retryAfterSeconds = NumberUtils.toInt(hc.getResponseHeaders().get(DefaultGitHubClient.RETRY_AFTER).get(0));
                             long startSleeping = System.currentTimeMillis();
-                            LOG.info("Should Retry-After: " + retryAfterSeconds + " sec. Start sleeping at: " + new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
+                            LOG.info(String.format("Should Retry-After: %d sec. Start sleeping at: %s", retryAfterSeconds, new DateTime(startSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa")));
                             sleep(retryAfterSeconds * 1000L);
                             long endSleeping = System.currentTimeMillis();
-                            LOG.info("Waking up after [" + (endSleeping - startSleeping) / 1000L + "] sec, " +
-                                    "at: " + new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa"));
+                            LOG.info(String.format("Waking up after [%d] sec, at: %s", (endSleeping - startSleeping) / 1000L, new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa")));
                         }
                         repo.getErrors().add(error);
                     } catch (RestClientException | MalformedURLException ex) {
-                        LOG.error("Error fetching commits for:" + repo.getRepoUrl(), ex);
-                        statusString = "EXCEPTION, " + ex.getClass().getCanonicalName();
+                        LOG.error(String.format("Error fetching commits for:%s", repo.getRepoUrl()), ex);
+                        statusString = String.format("EXCEPTION, %s", ex.getClass().getCanonicalName());
                         CollectionError error = new CollectionError(CollectionError.UNKNOWN_HOST, ex.getMessage());
                         repo.getErrors().add(error);
                     } catch (HygieiaException he) {
-                        LOG.error("Error fetching commits for:" + repo.getRepoUrl(), he);
-                        statusString = "EXCEPTION, " + he.getClass().getCanonicalName();
+                        LOG.error(String.format("Error fetching commits for:%s", repo.getRepoUrl()), he);
+                        statusString = String.format("EXCEPTION, %s", he.getClass().getCanonicalName());
                         CollectionError error = new CollectionError(String.valueOf(he.getErrorCode()), he.getMessage());
                         repo.getErrors().add(error);
                     }
                     gitHubRepoRepository.save(repo);
                 }
             } catch (Throwable e) {
-                statusString = "EXCEPTION, " + e.getClass().getCanonicalName();
-                LOG.error("Unexpected exception when collecting url=" + repoUrl, e);
+                statusString = String.format("EXCEPTION, %s", e.getClass().getCanonicalName());
+                LOG.error(String.format("Unexpected exception when collecting url=%s", repoUrl), e);
             } finally {
                 String age = readableAge(lastUpdated, start);
                 long itemProcessTime = System.currentTimeMillis() - repoStart;
@@ -402,7 +401,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                     .<Map<String, Commit>>collect(HashMap::new, (m, c) -> m.put(c.getScmRevisionNumber(), c), Map::putAll)
                     .values();
             for (Commit commit : nonDupCommits) {
-                LOG.debug(commit.getTimestamp() + ":::" + commit.getScmCommitLog());
+                LOG.debug(String.format("%d:::%s", commit.getTimestamp(), commit.getScmCommitLog()));
                 if (isNewCommit(repo, commit)) {
                     commit.setCollectorItemId(repo.getId());
                     commitRepository.save(commit);

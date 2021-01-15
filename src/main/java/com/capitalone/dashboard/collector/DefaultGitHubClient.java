@@ -341,7 +341,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 JSONObject repository = (JSONObject) data.get("repository");
 
                 GitHubPaging commitPaging = processCommits((JSONObject) repository.get("ref"), repo);
-                LOG.debug("--- Processed " + commitPaging.getCurrentCount() + " commits");
+                LOG.debug(String.format("--- Processed %d commits", commitPaging.getCurrentCount()));
 
                 alldone = commitPaging.isLastPage();
                 missingCommitCount += commitPaging.getCurrentCount();
