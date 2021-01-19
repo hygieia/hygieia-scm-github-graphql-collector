@@ -3,6 +3,7 @@ package com.capitalone.dashboard.collector;
 import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.client.RestUserInfo;
 import com.capitalone.dashboard.misc.HygieiaException;
+import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectionMode;
 import com.capitalone.dashboard.model.Comment;
 import com.capitalone.dashboard.model.Commit;
@@ -19,7 +20,6 @@ import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.Encryption;
 import com.capitalone.dashboard.util.EncryptionException;
 import com.capitalone.dashboard.util.GithubGraphQLQuery;
-
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -37,16 +37,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 
+import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * GitHubClient implementation that uses SVNKit to fetch information about
@@ -79,11 +85,12 @@ public class DefaultGitHubClient implements GitHubClient {
     private static final long ONE_DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
     private GitHubRateLimit rateLimit = null;
 
-    public class RedirectedStatus {
+    public static class RedirectedStatus {
         private boolean isRedirected = false;
         private String redirectedUrl = null;
 
-        RedirectedStatus() {}
+        RedirectedStatus() {
+        }
 
         RedirectedStatus(boolean isRedirected, String redirectedUrl) {
             this.isRedirected = isRedirected;
@@ -138,13 +145,116 @@ public class DefaultGitHubClient implements GitHubClient {
         return ldapMap;
     }
 
-    protected  void setAuthorTypeMap(Map<String, String > authorTypeMap) { this.authorTypeMap = authorTypeMap; }
+    protected void setAuthorTypeMap(Map<String, String> authorTypeMap) {
+        this.authorTypeMap = authorTypeMap;
+    }
 
-    protected Map<String, String> getAuthorTypeMap() { return authorTypeMap; }
+    protected Map<String, String> getAuthorTypeMap() {
+        return authorTypeMap;
+    }
+
+
+    @Override
+    public ChangeRepoResponse getChangedRepos(long lastEventId, long lastEventTimeStamp) throws MalformedURLException, HygieiaException {
+        Set<GitHubParsed> changedRepos = new HashSet<>();
+        String pageUrl = settings.getBaseApiUrl() + "events";
+        boolean lastPage = false;
+        boolean stop = false;
+        String queryUrlPage = pageUrl;
+
+        long latestEventId = lastEventId;
+        long latestEventTimeStamp = lastEventTimeStamp;
+        int count = 0;
+        while (!lastPage && !stop) {
+            LOG.info(String.format("Executing %s", queryUrlPage));
+            ResponseEntity<String> response = makeRestCallGet(queryUrlPage);
+            JSONArray jsonArray = parseAsArray(response);
+            for (Object item : jsonArray) {
+                JSONObject jsonObject = (JSONObject) item;
+                long eventId = asLong(jsonObject, "id");
+                String createdAt = str(jsonObject,"created_at");
+                long eventTimeStamp = getTimeStampMills(createdAt);
+                count++;
+                if (count == 1) {
+                    latestEventId = eventId;
+                    latestEventTimeStamp = eventTimeStamp;
+                }
+                if ((eventId <= lastEventId) || (eventTimeStamp <= lastEventTimeStamp)){
+                    stop = true;
+                    break;
+                }
+                JSONObject repoObject = (JSONObject) jsonObject.get("repo");
+                String url = str(repoObject,"url");
+                GitHubParsed gitHubParsed = new GitHubParsed(url);
+                changedRepos.add(gitHubParsed);
+            }
+            if (!CollectionUtils.isEmpty(jsonArray)) {
+                if (isThisLastPage(response)) {
+                    lastPage = true;
+                } else {
+                    lastPage = false;
+                    queryUrlPage = getNextPageUrl(response);
+                }
+            } else {
+                lastPage = true;
+            }
+        }
+        return new ChangeRepoResponse(changedRepos, latestEventId,latestEventTimeStamp);
+    }
+
+    /**
+     * See if it is the last page: obtained from the response header
+     *
+     * @param response
+     * @return
+     */
+    private static boolean isThisLastPage(ResponseEntity<String> response) {
+        HttpHeaders header = response.getHeaders();
+        List<String> link = header.get("Link");
+        if (link == null || link.isEmpty()) {
+            return true;
+        } else {
+            return link.stream().noneMatch(l -> l.contains("rel=\"next\""));
+        }
+    }
+
+    private static String getNextPageUrl(ResponseEntity<String> response) {
+        String nextPageUrl = "";
+        HttpHeaders header = response.getHeaders();
+        List<String> link = header.get("Link");
+        if (link == null || link.isEmpty()) {
+            return nextPageUrl;
+        }
+
+        for (String l : link) {
+            if (l.contains("rel=\"next\"")) {
+                String[] parts = l.split(",");
+                if (parts.length > 0) {
+                    for (String part : parts) {
+                        if (part.contains("rel=\"next\"")) {
+                            nextPageUrl = part.split(";")[0];
+                            nextPageUrl = nextPageUrl.replaceFirst("<", "");
+                            nextPageUrl = nextPageUrl.replaceFirst(">", "").trim();
+                            // Github Link headers for 'next' and 'last' are URL Encoded
+                            String decodedPageUrl;
+                            try {
+                                decodedPageUrl = URLDecoder.decode(nextPageUrl, StandardCharsets.UTF_8.name());
+                            } catch (UnsupportedEncodingException e) {
+                                decodedPageUrl = URLDecoder.decode(nextPageUrl);
+                            }
+                            return decodedPageUrl;
+                        }
+                    }
+                }
+            }
+        }
+
+        return nextPageUrl;
+    }
 
     @Override
     @SuppressWarnings("PMD.ExcessiveMethodLength")
-    public void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> existingIssueMap) throws RestClientException, MalformedURLException, HygieiaException {
+    public void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> existingIssueMap) throws MalformedURLException, HygieiaException {
         // format URL
         String repoUrl = (String) repo.getOptions().get("url");
         GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
@@ -170,22 +280,22 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONObject query = buildQuery(true, firstRun, false, gitHubParsed, repo, dummyCommitPaging, dummyPRPaging, dummyIssuePaging);
         int loopCount = 1;
         while (!alldone) {
-            LOG.debug("Executing loop " + loopCount + " for " + gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName());
+            LOG.debug(String.format("Executing loop %d for %s/%s", loopCount, gitHubParsed.getOrgName(), gitHubParsed.getRepoName()));
             JSONObject data = getDataFromRestCallPost(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, query);
 
             if (data != null) {
                 JSONObject repository = (JSONObject) data.get("repository");
 
                 GitHubPaging pullPaging = processPullRequest((JSONObject) repository.get("pullRequests"), repo, existingPRMap);
-                LOG.debug("--- Processed " + pullPaging.getCurrentCount() + " of total " + pullPaging.getTotalCount() + " pull requests");
+                LOG.debug(String.format("--- Processed %d of total %d pull requests", pullPaging.getCurrentCount(), pullPaging.getTotalCount()));
 
                 GitHubPaging issuePaging = processIssues((JSONObject) repository.get("issues"), gitHubParsed, existingIssueMap, historyTimeStamp);
-                LOG.debug("--- Processed " + issuePaging.getCurrentCount() + " of total " + issuePaging.getTotalCount() + " issues");
+                LOG.debug(String.format("--- Processed %d of total %d issues", issuePaging.getCurrentCount(), issuePaging.getTotalCount()));
 
                 GitHubPaging commitPaging = processCommits((JSONObject) repository.get("ref"), repo);
-                LOG.debug("--- Processed " + commitPaging.getCurrentCount() + " commits");
+                LOG.debug(String.format("--- Processed %d commits", commitPaging.getCurrentCount()));
 
-                alldone = pullPaging.isLastPage() && commitPaging.isLastPage() && issuePaging.isLastPage();
+                alldone = Stream.of(pullPaging, commitPaging, issuePaging).allMatch(GitHubPaging::isLastPage);
 
                 query = buildQuery(false, firstRun, false, gitHubParsed, repo, commitPaging, pullPaging, issuePaging);
 
@@ -193,10 +303,10 @@ public class DefaultGitHubClient implements GitHubClient {
             }
         }
 
-        if(CollectionUtils.isEmpty(pullRequests)) {
-            LOG.info( "-- Collected 0 Pull Requests at repo: " + repoUrl + "; Branch: " + repo.getBranch());
+        if (CollectionUtils.isEmpty(pullRequests)) {
+            LOG.info("-- Collected 0 Pull Requests at repo: " + repoUrl + "; Branch: " + repo.getBranch());
         } else {
-            long oldestPRTimestamp = pullRequests.get(pullRequests.size()-1).getUpdatedAt();
+            long oldestPRTimestamp = pullRequests.get(pullRequests.size() - 1).getUpdatedAt();
             LOG.info("-- Collected " + commits.size() + " Commits, " + pullRequests.size() + " Pull Requests, " + issues.size() + " Issues since " + getDate(new DateTime(oldestPRTimestamp), 0, 0));
         }
 
@@ -231,7 +341,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 JSONObject repository = (JSONObject) data.get("repository");
 
                 GitHubPaging commitPaging = processCommits((JSONObject) repository.get("ref"), repo);
-                LOG.debug("--- Processed " + commitPaging.getCurrentCount() + " commits");
+                LOG.debug(String.format("--- Processed %d commits", commitPaging.getCurrentCount()));
 
                 alldone = commitPaging.isLastPage();
                 missingCommitCount += commitPaging.getCurrentCount();
@@ -242,10 +352,10 @@ public class DefaultGitHubClient implements GitHubClient {
             }
         }
 
-        if(CollectionUtils.isEmpty(commits)) {
-            LOG.info( "-- Collected 0 Missing Commits At Repo: " + repoUrl + "; Branch: " + repo.getBranch());
+        if (CollectionUtils.isEmpty(commits)) {
+            LOG.info("-- Collected 0 Missing Commits At Repo: " + repoUrl + "; Branch: " + repo.getBranch());
         } else {
-            long oldestCommitTimestamp = commits.get(commits.size()-1).getScmCommitTimestamp();
+            long oldestCommitTimestamp = commits.get(commits.size() - 1).getScmCommitTimestamp();
             LOG.info("-- Collected " + missingCommitCount + " Missing Commits, since " + getDate(new DateTime(oldestCommitTimestamp), 0, 0));
         }
 
@@ -254,11 +364,11 @@ public class DefaultGitHubClient implements GitHubClient {
 
     public RedirectedStatus checkForRedirectedRepo(GitHubRepo repo) throws MalformedURLException, HygieiaException {
         GitHubParsed gitHubParsed = new GitHubParsed(repo.getRepoUrl());
-        String query = gitHubParsed.getBaseApiUrl() + "repos/" + gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName();
+        String query = gitHubParsed.getBaseApiUrl() + "repos/" + gitHubParsed.getOrgName() + '/' + gitHubParsed.getRepoName();
 
         ResponseEntity<String> response = makeRestCallGet(query);
 
-        JSONObject queryJSONBody = (JSONObject) parseAsObject(response);
+        JSONObject queryJSONBody = parseAsObject(response);
         String repoUrl = str(queryJSONBody, "html_url");
         if (!repoUrl.equals(repo.getRepoUrl())) {
             LOG.info("original url: " + repo.getRepoUrl() + " is redirected to new url: " + repoUrl);
@@ -465,7 +575,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
-    private CollectionMode getCollectionMode(boolean firstTime, GitHubPaging commitPaging, GitHubPaging pullPaging, GitHubPaging issuePaging) {
+    private static CollectionMode getCollectionMode(boolean firstTime, GitHubPaging commitPaging, GitHubPaging pullPaging, GitHubPaging issuePaging) {
         if (firstTime) {
             if (!pullPaging.isLastPage() && !issuePaging.isLastPage()) return CollectionMode.FirstTimeAll;
             if (pullPaging.isLastPage() && !issuePaging.isLastPage()) return CollectionMode.FirstTimeCommitAndIssue;
@@ -572,23 +682,23 @@ public class DefaultGitHubClient implements GitHubClient {
             if (node.get("headRepository") != null) {
                 JSONObject headObject = (JSONObject) node.get("headRepository");
                 GitHubParsed sourceRepoUrlParsed = new GitHubParsed(str(headObject, "url"));
-                pull.setSourceRepo(!Objects.equals("", sourceRepoUrlParsed.getOrgName()) ? sourceRepoUrlParsed.getOrgName() + "/" + sourceRepoUrlParsed.getRepoName() : sourceRepoUrlParsed.getRepoName());
+                pull.setSourceRepo(!Objects.equals("", sourceRepoUrlParsed.getOrgName()) ? String.format("%s/%s", sourceRepoUrlParsed.getOrgName(), sourceRepoUrlParsed.getRepoName()) : sourceRepoUrlParsed.getRepoName());
             }
             if (node.get("baseRef") != null) {
                 pull.setBaseSha(str((JSONObject) ((JSONObject) node.get("baseRef")).get("target"), "oid"));
             }
             pull.setTargetBranch(str(node, "baseRefName"));
-            pull.setTargetRepo(!Objects.equals("", gitHubParsed.getOrgName()) ? gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName() : gitHubParsed.getRepoName());
+            pull.setTargetRepo(!Objects.equals("", gitHubParsed.getOrgName()) ? String.format("%s/%s", gitHubParsed.getOrgName(), gitHubParsed.getRepoName()) : gitHubParsed.getRepoName());
 
             boolean stop = (!MapUtils.isEmpty(prMap) && prMap.get(pull.getUpdatedAt()) != null) && (Objects.equals(prMap.get(pull.getUpdatedAt()), pull.getNumber()));
             if (stop) {
                 LOG.debug("------ Skipping pull request processing. History check is met OR Found matching entry in existing pull requests. Pull Request#" + pull.getNumber());
                 paging.setLastPage(true);
                 break;
-            }else{
+            } else {
                 localCount++;
                 pullRequests.add(pull);
-                if(pull.getUpdatedAt() < (System.currentTimeMillis() - (long) settings.getFirstRunHistoryDays()*ONE_DAY_IN_MILLISECONDS)) {
+                if (pull.getUpdatedAt() < (System.currentTimeMillis() - (long) settings.getFirstRunHistoryDays() * ONE_DAY_IN_MILLISECONDS)) {
                     paging.setLastPage(true);
                     break;
                 }
@@ -648,14 +758,14 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setScmAuthorLDAPDN(authorLDAPDN);
             commit.setScmCommitLog(message);
             commit.setScmCommitTimestamp(getTimeStampMills(str(authorJSON, "date")));
-            commit.setNumberOfChanges(changedFiles+deletions+additions);
+            commit.setNumberOfChanges(changedFiles + deletions + additions);
             List<String> parentShas = getParentShas(node);
             commit.setScmParentRevisionNumbers(parentShas);
             commit.setFirstEverCommit(CollectionUtils.isEmpty(parentShas));
             commit.setType(getCommitType(CollectionUtils.size(parentShas), message));
             commits.add(commit);
 
-            if(commit.getScmCommitTimestamp() < (System.currentTimeMillis()- (long) settings.getFirstRunHistoryDays()*ONE_DAY_IN_MILLISECONDS)) {
+            if (commit.getScmCommitTimestamp() < (System.currentTimeMillis() - (long) settings.getFirstRunHistoryDays() * ONE_DAY_IN_MILLISECONDS)) {
                 paging.setLastPage(true);
                 break;
             }
@@ -825,7 +935,7 @@ public class DefaultGitHubClient implements GitHubClient {
             int changedFiles = NumberUtils.toInt(str(commit, "changedFiles"));
             int deletions = NumberUtils.toInt(str(commit, "deletions"));
             int additions = NumberUtils.toInt(str(commit, "additions"));
-            newCommit.setNumberOfChanges(changedFiles+deletions+additions);
+            newCommit.setNumberOfChanges(changedFiles + deletions + additions);
             prCommits.add(newCommit);
         }
 
@@ -838,7 +948,7 @@ public class DefaultGitHubClient implements GitHubClient {
         return prCommits;
     }
 
-    private List<CommitStatus> getCommitStatuses(JSONObject statusObject) throws RestClientException {
+    private static List<CommitStatus> getCommitStatuses(JSONObject statusObject) throws RestClientException {
 
         Map<String, CommitStatus> statuses = new HashMap<>();
 
@@ -941,7 +1051,7 @@ public class DefaultGitHubClient implements GitHubClient {
         return null;
     }
 
-    private String getMergeEventSha(GitRequest pr, JSONObject timelineObject) throws RestClientException {
+    private static String getMergeEventSha(GitRequest pr, JSONObject timelineObject) throws RestClientException {
         String mergeEventSha = "";
         if (timelineObject == null) {
             return mergeEventSha;
@@ -990,15 +1100,14 @@ public class DefaultGitHubClient implements GitHubClient {
             rateLimit = new GitHubRateLimit();
             return true;
         }
-        long resetTimeMillis = rateLimit.getResetTime()*1000L;
-        if ( (System.currentTimeMillis() - resetTimeMillis) > 5000L) {
+        long resetTimeMillis = rateLimit.getResetTime() * 1000L;
+        if ((System.currentTimeMillis() - resetTimeMillis) > 5000L) {
             LOG.info("reset time is more than 5 seconds in the past, reset the remaining rate lime to max allowed");
-            rateLimit.setRemaining( rateLimit.getLimit() );
+            rateLimit.setRemaining(rateLimit.getLimit());
         }
 
         if (rateLimit.getRemaining() > 0) {
-            LOG.info("Remaining " + rateLimit.getRemaining() + " of limit " + rateLimit.getLimit()
-                    + " resetTime " + rateLimit.getResetTime() + " (" + new DateTime(resetTimeMillis).toString("yyyy-MM-dd hh:mm:ss.SSa")+")");
+            LOG.info(String.format("Remaining %d of limit %d resetTime %d (%s)", rateLimit.getRemaining(), rateLimit.getLimit(), rateLimit.getResetTime(), new DateTime(resetTimeMillis).toString("yyyy-MM-dd hh:mm:ss.SSa")));
         } else {
             LOG.info("Rate limit values not available yet");
             return true;
@@ -1008,11 +1117,11 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     /**
-     * @deprecated  use isUnderRateLimit() instead.
+     * @deprecated use isUnderRateLimit() instead.
      */
     @Override
     @Deprecated
-    public GitHubRateLimit getRateLimit(GitHubRepo repo) throws MalformedURLException, HygieiaException {
+    public GitHubRateLimit getRateLimit(GitHubRepo repo) {
         return rateLimit;
     }
 
@@ -1045,7 +1154,7 @@ public class DefaultGitHubClient implements GitHubClient {
         if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
         //This is weird. Github does replace the _ in commit author with - in the user api!!!
         String formattedUser = user.replace("_", "-");
-        if(ldapMap.containsKey(formattedUser)) {
+        if (ldapMap.containsKey(formattedUser)) {
             return ldapMap.get(formattedUser);
         }
         this.getUser(repo, formattedUser);
@@ -1056,7 +1165,7 @@ public class DefaultGitHubClient implements GitHubClient {
         if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
         //This is weird. Github does replace the _ in commit author with - in the user api!!!
         String formattedUser = user.replace("_", "-");
-        if(authorTypeMap.containsKey(formattedUser)) {
+        if (authorTypeMap.containsKey(formattedUser)) {
             return authorTypeMap.get(formattedUser);
         }
         this.getUser(repo, formattedUser);
@@ -1064,11 +1173,16 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     /// Utility Methods
-    private int asInt(JSONObject json, String key) {
+    private static int asInt(JSONObject json, String key) {
         return NumberUtils.toInt(str(json, key));
     }
 
-    private long getTimeStampMills(String dateTime) {
+    private static long asLong(JSONObject json, String key) {
+        return NumberUtils.toLong(str(json, key));
+    }
+
+
+    private static long getTimeStampMills(String dateTime) {
         return StringUtils.isEmpty(dateTime) ? 0 : new DateTime(dateTime).getMillis();
     }
 
@@ -1102,9 +1216,9 @@ public class DefaultGitHubClient implements GitHubClient {
 
     public long getRepoOffsetTime(GitHubRepo repo) {
         List<Commit> allPrCommits = new ArrayList<>();
-        pullRequests.stream().filter(pr -> "merged".equalsIgnoreCase(pr.getState())).forEach(pr -> {
-            allPrCommits.addAll(pr.getCommits().stream().collect(Collectors.toList()));
-        });
+        pullRequests.stream()
+                .filter(pr -> "merged".equalsIgnoreCase(pr.getState()))
+                .forEach(pr -> allPrCommits.addAll(new ArrayList<>(pr.getCommits())));
         if (CollectionUtils.isEmpty(allPrCommits)) {
             return 0;
         }
@@ -1127,15 +1241,17 @@ public class DefaultGitHubClient implements GitHubClient {
     // Makes use of the graphQL endpoint, will not work for REST api
     private JSONObject getDataFromRestCallPost(GitHubParsed gitHubParsed, GitHubRepo repo, String password, String personalAccessToken, JSONObject query) throws MalformedURLException, HygieiaException {
         String graphqlUrl = gitHubParsed.getGraphQLUrl();
-        if(StringUtils.isNotEmpty(settings.getGraphqlUrl())) { graphqlUrl = settings.getGraphqlUrl(); }
+        if (StringUtils.isNotEmpty(settings.getGraphqlUrl())) {
+            graphqlUrl = settings.getGraphqlUrl();
+        }
         ResponseEntity<String> response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
         JSONObject data = (JSONObject) parseAsObject(response).get("data");
         JSONArray errors = getArray(parseAsObject(response), "errors");
         HttpHeaders headers = response.getHeaders();
 
-        if (headers !=null && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_LIMIT))
+        if (headers != null && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_LIMIT))
                 && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_REMAINING))
-                && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_RESET)) ) {
+                && !CollectionUtils.isEmpty(headers.get(X_RATE_LIMIT_RESET))) {
             int limit = NumberUtils.toInt(headers.get(X_RATE_LIMIT_LIMIT).get(0));
             int remaining = NumberUtils.toInt(headers.get(X_RATE_LIMIT_REMAINING).get(0));
             long rateLimitResetAt = NumberUtils.toLong(headers.get(X_RATE_LIMIT_RESET).get(0));
@@ -1194,10 +1310,10 @@ public class DefaultGitHubClient implements GitHubClient {
     private ResponseEntity<String> makeRestCallGet(String url) throws RestClientException {
         // Basic Auth only.
         // This handles the case when settings.getPersonalAccessToken() is empty
-        return restClient.makeRestCallGet(url, "token", settings.getPersonalAccessToken());
+        return restClient.makeRestCallGet(url, "token ", settings.getPersonalAccessToken());
     }
 
-    private JSONObject parseAsObject(ResponseEntity<String> response) {
+    private static JSONObject parseAsObject(ResponseEntity<String> response) {
         try {
             return (JSONObject) new JSONParser().parse(response.getBody());
         } catch (ParseException pe) {
@@ -1206,7 +1322,16 @@ public class DefaultGitHubClient implements GitHubClient {
         return new JSONObject();
     }
 
-    private String str(JSONObject json, String key) {
+    private static JSONArray parseAsArray(ResponseEntity<String> response) {
+        try {
+            return (JSONArray) new JSONParser().parse(response.getBody());
+        } catch (ParseException pe) {
+            LOG.error(pe.getMessage());
+        }
+        return new JSONArray();
+    }
+
+    private static String str(JSONObject json, String key) {
         if (json == null) return "";
         Object value = json.get(key);
         return (value == null) ? "" : value.toString();
@@ -1218,7 +1343,7 @@ public class DefaultGitHubClient implements GitHubClient {
         return (JSONArray) json.get(key);
     }
 
-    private List<String> getParentShas(JSONObject commit) {
+    private static List<String> getParentShas(JSONObject commit) {
         JSONObject parents = (JSONObject) commit.get("parents");
         JSONArray parentNodes = (JSONArray) parents.get("nodes");
         List<String> parentShas = new ArrayList<>();

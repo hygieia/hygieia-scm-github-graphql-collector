@@ -2,12 +2,12 @@ package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.CollectionError;
-import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.CollectorItem;
 import com.capitalone.dashboard.model.CollectorType;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.CommitType;
 import com.capitalone.dashboard.model.Component;
+import com.capitalone.dashboard.model.GitHubCollector;
 import com.capitalone.dashboard.model.GitHubRateLimit;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
@@ -62,13 +62,13 @@ public class GitHubCollectorTaskTest {
     @InjectMocks private GitHubCollectorTask task;
 
     @Test
-    public void collect_testCollect() throws MalformedURLException, HygieiaException {
+    public void collect_testCollect() {
         when(dbComponentRepository.findAll()).thenReturn(components());
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -101,13 +101,13 @@ public class GitHubCollectorTaskTest {
 
 
     @Test
-    public void collect_testCollect_repoNameMatcher() throws MalformedURLException, HygieiaException {
+    public void collect_testCollect_repoNameMatcher() {
         when(dbComponentRepository.findAll()).thenReturn(components());
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -141,13 +141,13 @@ public class GitHubCollectorTaskTest {
     }
 
     @Test
-    public void collect_testCollect_orgNameMatcher() throws MalformedURLException, HygieiaException {
+    public void collect_testCollect_orgNameMatcher() {
         when(dbComponentRepository.findAll()).thenReturn(components());
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -182,14 +182,14 @@ public class GitHubCollectorTaskTest {
 
 
     @Test
-    public void collect_testCollect_with_Threshold_0() throws MalformedURLException, HygieiaException {
+    public void collect_testCollect_with_Threshold_0() {
         when(dbComponentRepository.findAll()).thenReturn(components());
 
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -220,14 +220,14 @@ public class GitHubCollectorTaskTest {
     }
 
     @Test
-    public void collect_testCollect_with_Threshold_1() throws MalformedURLException, HygieiaException {
+    public void collect_testCollect_with_Threshold_1() {
         when(dbComponentRepository.findAll()).thenReturn(components());
 
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -261,14 +261,14 @@ public class GitHubCollectorTaskTest {
     }
 
     @Test
-    public void collect_testCollect_with_Threshold_1_Error_1() throws MalformedURLException, HygieiaException {
+    public void collect_testCollect_with_Threshold_1_Error_1() {
         when(dbComponentRepository.findAll()).thenReturn(components());
 
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -309,7 +309,7 @@ public class GitHubCollectorTaskTest {
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
         when(gitHubRepoRepository.findByCollectorIdIn(gitID)).thenReturn(getGitHubs());
 
-        Collector collector = new Collector();
+        GitHubCollector collector = new GitHubCollector();
         collector.setEnabled(true);
         collector.setName("collector");
         collector.setId(new ObjectId("111ca42a258ad365fbb64ecc"));

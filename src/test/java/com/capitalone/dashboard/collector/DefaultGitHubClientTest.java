@@ -2,10 +2,10 @@ package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.client.RestOperationsSupplier;
-import com.capitalone.dashboard.misc.HygieiaException;
-import com.capitalone.dashboard.model.GitHubRepo;
-import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.collector.DefaultGitHubClient.RedirectedStatus;
+import com.capitalone.dashboard.misc.HygieiaException;
+import com.capitalone.dashboard.model.GitHubParsed;
+import com.capitalone.dashboard.model.GitHubRepo;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -20,6 +20,9 @@ import java.net.MalformedURLException;
 import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -52,10 +55,10 @@ public class DefaultGitHubClientTest {
                 .thenReturn(new ResponseEntity<>(goodLdapResponse(), HttpStatus.OK));
         String ldapUser = defaultGitHubClient.getLDAPDN(getGitRepo(),userUnderscore);
         assertEquals(ldapUser, "CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com");
-        assertEquals(defaultGitHubClient.getLdapMap().containsKey(userhyphen), true);
-        assertEquals(defaultGitHubClient.getLdapMap().containsKey(userUnderscore), false);
+        assertTrue(defaultGitHubClient.getLdapMap().containsKey(userhyphen));
+        assertFalse(defaultGitHubClient.getLdapMap().containsKey(userUnderscore));
         assertEquals(defaultGitHubClient.getLdapMap().get(userhyphen), "CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com");
-        assertEquals(defaultGitHubClient.getLdapMap().get(userUnderscore), null);
+        assertNull(defaultGitHubClient.getLdapMap().get(userUnderscore));
     }
 
 
@@ -68,7 +71,7 @@ public class DefaultGitHubClientTest {
                 .thenReturn(new ResponseEntity<>(goodLdapResponse(), HttpStatus.OK));
         String ldapUser = defaultGitHubClient.getLDAPDN(getGitRepo(),userhyphen);
         assertEquals(ldapUser, "CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com");
-        assertEquals(defaultGitHubClient.getLdapMap().containsKey(userhyphen), true);
+        assertTrue(defaultGitHubClient.getLdapMap().containsKey(userhyphen));
     }
 
 
@@ -82,7 +85,7 @@ public class DefaultGitHubClientTest {
                 .thenReturn(new ResponseEntity<>(goodLdapResponse(), HttpStatus.OK));
         String ldapUser = defaultGitHubClient.getLDAPDN(getGitRepo(),user);
         assertEquals(ldapUser, "CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com");
-        assertEquals(defaultGitHubClient.getLdapMap().containsKey(user), true);
+        assertTrue(defaultGitHubClient.getLdapMap().containsKey(user));
     }
 
     @Test
@@ -93,8 +96,8 @@ public class DefaultGitHubClientTest {
                 eq(null), eq(String.class)))
                 .thenReturn(new ResponseEntity<>("", HttpStatus.OK));
         String ldapUser = defaultGitHubClient.getLDAPDN(getGitRepo(),user);
-        assertEquals(ldapUser, null);
-        assertEquals(defaultGitHubClient.getLdapMap().containsKey(user), false);
+        assertNull(ldapUser);
+        assertFalse(defaultGitHubClient.getLdapMap().containsKey(user));
     }
 
     @Test
@@ -104,13 +107,13 @@ public class DefaultGitHubClientTest {
 
         String notRedirectedBody = "{\"html_url\": \"" + repo.getRepoUrl() + "\"}";
 
-        String url = gitHubParsed.getBaseApiUrl() + "repos/" + gitHubParsed.getOrgName() + "/" + gitHubParsed.getRepoName();
+        String url = gitHubParsed.getBaseApiUrl() + "repos/" + gitHubParsed.getOrgName() + '/' + gitHubParsed.getRepoName();
         when(rest.exchange(eq(url), eq(HttpMethod.GET),
                 eq(null), eq(String.class)))
                 .thenReturn(new ResponseEntity<>(notRedirectedBody, HttpStatus.OK));
 
         RedirectedStatus status = defaultGitHubClient.checkForRedirectedRepo(repo);
-        assertEquals(status.isRedirected(), false);
+        assertFalse(status.isRedirected());
 
         String redirectedRepoUrl = "http://mygithub.com/user/redirectedrepo";
         String redirectedBody = "{\"html_url\": \"" + redirectedRepoUrl + "\"}";
@@ -120,7 +123,7 @@ public class DefaultGitHubClientTest {
             .thenReturn(new ResponseEntity<>(redirectedBody, HttpStatus.OK));
 
         status = defaultGitHubClient.checkForRedirectedRepo(repo);
-        assertEquals(status.isRedirected(), true);
+        assertTrue(status.isRedirected());
         assertEquals(status.getRedirectedUrl(), redirectedRepoUrl);
     }
 
@@ -133,7 +136,7 @@ public class DefaultGitHubClientTest {
                 .thenReturn(new ResponseEntity<>(goodLdapResponse(), HttpStatus.OK));
         String ldapUser = defaultGitHubClient.getLDAPDN(getGitRepo(),user);
         assertEquals(ldapUser, "CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com");
-        assertEquals(defaultGitHubClient.getLdapMap().containsKey(user), true);
+        assertTrue(defaultGitHubClient.getLdapMap().containsKey(user));
     }
 
 
