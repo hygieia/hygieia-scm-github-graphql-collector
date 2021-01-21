@@ -1,7 +1,6 @@
 package com.capitalone.dashboard.collector;
 
 
-import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.BaseModel;
 import com.capitalone.dashboard.model.CollectionError;
@@ -18,7 +17,6 @@ import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.repository.GitRequestRepository;
 import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.GithubRepoMatcher;
-import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -35,7 +33,6 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
 import java.net.MalformedURLException;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -103,6 +100,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
         allOptions.put(GitHubRepo.USER_ID, "");
         allOptions.put(GitHubRepo.PASSWORD, "");
         allOptions.put(GitHubRepo.PERSONAL_ACCESS_TOKEN, "");
+        allOptions.put(GitHubRepo.TYPE, "");
         protoType.setAllFields(allOptions);
 
         Map<String, Object> uniqueOptions = new HashMap<>();
@@ -164,7 +162,7 @@ public class GitHubCollectorTask extends CollectorTask<Collector> {
        clean(collector);
        List<GitHubRepo> enabledRepos = enabledRepos(collector);
        if(gitHubSettings.getSearchCriteria() != null){
-           String searchCriteria[] = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
+           String[] searchCriteria = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
            if(REPO_NAME.equalsIgnoreCase(searchCriteria[0])){
                enabledRepos = enabledRepos.stream().filter(repo -> GithubRepoMatcher.repoNameMatcher(repo.getRepoUrl(),searchCriteria[1])).collect(Collectors.toList());
            }else if(ORG_NAME.equalsIgnoreCase(searchCriteria[0])) {

@@ -5,10 +5,11 @@ package com.capitalone.dashboard.model;
  */
 public class GitHubRepo extends CollectorItem {
     public static final String REPO_URL = "url"; // http://github.company.com/jack/somejavacode
-    public static final String BRANCH = "branch"; // master, development etc.
+    public static final String BRANCH = "branch"; // main, development, release  etc.
     public static final String USER_ID = "userID";
     public static final String PASSWORD = "password";
     public static final String PERSONAL_ACCESS_TOKEN = "personalAccessToken";
+    public static final String TYPE = "type"; // SOURCE, BUILD, INFRA, TEST etc
 
 
     public String getUserId() {
@@ -35,6 +36,10 @@ public class GitHubRepo extends CollectorItem {
     public void setBranch(String branch) {
         getOptions().put(BRANCH, branch);
     }
+
+    public String getType() { return (String) getOptions().get(TYPE); }
+
+    public void setType(String type) { getOptions().put(TYPE, type); }
 
     public static String getPersonalAccessToken() {
         return PERSONAL_ACCESS_TOKEN;
