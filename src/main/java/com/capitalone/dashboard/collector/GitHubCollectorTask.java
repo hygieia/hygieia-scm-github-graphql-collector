@@ -93,7 +93,10 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
 
     @Override
     public GitHubCollector getCollector() {
-        GitHubCollector existingCollector = collectorRepository.findByName("GitHub");
+        GitHubCollector existingCollector = null;
+        try {
+            existingCollector = collectorRepository.findByName("GitHub");
+        } catch (ClassCastException ignore) {}
 
         GitHubCollector protoType = new GitHubCollector();
         protoType.setName("GitHub");
@@ -182,7 +185,12 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         setupProxy();
         clean(collector);
         List<GitHubRepo> enabledRepos = enabledRepos(collector);
-        Set<GitHubRepo> changedRepos = reposToCollect(collector, enabledRepos);
+
+        if (gitHubSettings.isCollectChangedReposOnly()) {
+            Set<GitHubRepo> changedRepos = reposToCollect(collector, enabledRepos);
+            enabledRepos = new ArrayList<>(changedRepos);
+        }
+
         if (gitHubSettings.getSearchCriteria() != null) {
             String[] searchCriteria = gitHubSettings.getSearchCriteria().split(Pattern.quote("|"));
             if (REPO_NAME.equalsIgnoreCase(searchCriteria[0])) {
@@ -193,24 +201,25 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         }
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
         LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
-        collectProcess(collector, new ArrayList<>(changedRepos));
+        collectProcess(collector, enabledRepos);
+
         collectorRepository.save(collector);
     }
 
-    private Set<GitHubRepo> reposToCollect(GitHubCollector collector, List<GitHubRepo> enabledRepos) {
+    public Set<GitHubRepo> reposToCollect(GitHubCollector collector, List<GitHubRepo> enabledRepos) {
         Set<GitHubRepo> repoSet = new HashSet<>();
         try {
             ChangeRepoResponse changeRepoResponse = gitHubClient.getChangedRepos(collector.getLatestProcessedEventId(), collector.getLatestProcessedEventTimestamp());
             Set<GitHubParsed> changeRepos = changeRepoResponse.getChangeRepos();
-            Map<String, GitHubParsed> changedReposMap = changeRepos.stream().collect(Collectors.toMap(GitHubParsed::getUrl, Function.identity()));
-
+            Map<String, GitHubParsed> changedReposMap = changeRepos.stream().collect(Collectors.toMap(g -> g.getUrl().toLowerCase(), Function.identity()));
             repoSet = enabledRepos.stream().filter(e -> changedReposMap.containsKey(e.getRepoUrl().toLowerCase()) && !e.isPushed()).collect(Collectors.toSet());
             collector.setLatestProcessedEventId(changeRepoResponse.getLatestEventId());
             collector.setLatestProcessedEventTimestamp(changeRepoResponse.getLatestEventTimestamp());
             if ((System.currentTimeMillis() - collector.getLastPrivateRepoCollectionTimestamp() > gitHubSettings.getPrivateRepoCollectionTime())) {
                 Set<GitHubRepo> privateRepos = enabledRepos
                         .stream()
-                        .filter(e -> !StringUtils.isEmpty(e.getPassword()) && !StringUtils.isEmpty(e.getUserId()))
+                        .filter(e -> ((!StringUtils.isEmpty(e.getPassword()) && !StringUtils.isEmpty(e.getUserId()))
+                                || !StringUtils.isEmpty(e.getPersonalAccessToken())))
                         .collect(Collectors.toSet());
 
                 repoSet.addAll(privateRepos);

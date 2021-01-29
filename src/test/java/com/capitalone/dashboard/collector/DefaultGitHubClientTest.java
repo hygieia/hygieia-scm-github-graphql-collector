@@ -4,8 +4,13 @@ import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.client.RestOperationsSupplier;
 import com.capitalone.dashboard.collector.DefaultGitHubClient.RedirectedStatus;
 import com.capitalone.dashboard.misc.HygieiaException;
+import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRepo;
+import com.google.common.io.Resources;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -28,10 +33,12 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DefaultGitHubClientTest {
+    private static final Log LOG = LogFactory.getLog(DefaultGitHubClientTest.class);
 
-    @Mock
-    private RestOperationsSupplier restOperationsSupplier;
+    @Mock private RestOperationsSupplier restOperationsSupplier;
     @Mock private RestOperations rest;
+
+    private RestClient restClient;
     private GitHubSettings settings;
     private DefaultGitHubClient defaultGitHubClient;
     private static final String URL_USER = "http://mygithub.com/api/v3/users/";
@@ -40,6 +47,7 @@ public class DefaultGitHubClientTest {
     public void init() {
         when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new GitHubSettings();
+//        settings.setBaseApiUrl("github.com/api/");
         defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier));
         defaultGitHubClient.setLdapMap(new HashMap<>());
 
@@ -61,7 +69,6 @@ public class DefaultGitHubClientTest {
         assertNull(defaultGitHubClient.getLdapMap().get(userUnderscore));
     }
 
-
     @Test
     public void getLDAPDN_With_Hyphen() {
         String userhyphen = "this-has-hyphen";
@@ -73,8 +80,6 @@ public class DefaultGitHubClientTest {
         assertEquals(ldapUser, "CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com");
         assertTrue(defaultGitHubClient.getLdapMap().containsKey(userhyphen));
     }
-
-
 
     @Test
     public void getLDAPDNSimple() {
@@ -139,6 +144,17 @@ public class DefaultGitHubClientTest {
         assertTrue(defaultGitHubClient.getLdapMap().containsKey(user));
     }
 
+    @Test
+    public void testGetChangedRepo() throws Exception {
+        String url = settings.getBaseApiUrl() + "events";
+        String changeEventsData = getData("ChangeEvents.json");
+        when(rest.exchange(eq(url), eq(HttpMethod.GET), eq(null), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(changeEventsData, HttpStatus.OK));
+        ChangeRepoResponse changeRepoResponse = defaultGitHubClient.getChangedRepos(0, 0);
+        assertEquals(2, changeRepoResponse.getChangeRepos().size());
+        assertEquals(62674204, changeRepoResponse.getLatestEventId());
+        assertEquals(1611673668000L, changeRepoResponse.getLatestEventTimestamp());
+    }
 
     private GitHubRepo getGitRepo() {
         GitHubRepo repo = new GitHubRepo();
@@ -149,6 +165,10 @@ public class DefaultGitHubClientTest {
 
     private String goodLdapResponse() {
         return "{ \"ldap_dn\": \"CN=ldapUser,OU=Developers,OU=All Users,DC=cof,DC=ds,DC=mycompany,DC=com\"}";
+    }
+
+    private String getData(String filename) throws Exception {
+        return IOUtils.toString(Resources.getResource(filename));
     }
 
 }

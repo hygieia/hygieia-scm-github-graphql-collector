@@ -36,8 +36,8 @@ public class GitHubRepo extends CollectorItem {
         getOptions().put(BRANCH, branch);
     }
 
-    public static String getPersonalAccessToken() {
-        return PERSONAL_ACCESS_TOKEN;
+    public String getPersonalAccessToken() {
+        return (String) getOptions().get(PERSONAL_ACCESS_TOKEN);
     }
 
     public void setPersonalAccessToken(String personalAccessToken) {

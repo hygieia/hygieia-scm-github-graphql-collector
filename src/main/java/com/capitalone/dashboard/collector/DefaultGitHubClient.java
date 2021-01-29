@@ -68,6 +68,7 @@ public class DefaultGitHubClient implements GitHubClient {
     public static final String X_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining";
     public static final String X_RATE_LIMIT_RESET = "X-RateLimit-Reset";
     public static final String RETRY_AFTER = "Retry-After";
+    public static final String X_POLL_INTERVAL = "X-Poll-Interval";
 
     private final GitHubSettings settings;
 
@@ -80,8 +81,8 @@ public class DefaultGitHubClient implements GitHubClient {
     private Map<String, String> authorTypeMap;
     private final List<Pattern> commitExclusionPatterns = new ArrayList<>();
 
-
     private static final int FIRST_RUN_HISTORY_DEFAULT = 14;
+    private static final long ONE_SECOND_IN_MILLISECONDS = 1000;
     private static final long ONE_DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
     private GitHubRateLimit rateLimit = null;
 
@@ -165,9 +166,13 @@ public class DefaultGitHubClient implements GitHubClient {
         long latestEventId = lastEventId;
         long latestEventTimeStamp = lastEventTimeStamp;
         int count = 0;
+        int waitTime = 0;
         while (!lastPage && !stop) {
             LOG.info(String.format("Executing %s", queryUrlPage));
             ResponseEntity<String> response = makeRestCallGet(queryUrlPage);
+            if (response.getHeaders() != null && !CollectionUtils.isEmpty(response.getHeaders().get(X_POLL_INTERVAL))) {
+                waitTime = Integer.parseInt(response.getHeaders().get(X_POLL_INTERVAL).get(0));
+            }
             JSONArray jsonArray = parseAsArray(response);
             for (Object item : jsonArray) {
                 JSONObject jsonObject = (JSONObject) item;
@@ -199,6 +204,8 @@ public class DefaultGitHubClient implements GitHubClient {
                 lastPage = true;
             }
         }
+        LOG.info(String.format("Waiting for Github event poll interval : %s seconds", waitTime));
+        sleep(waitTime * ONE_SECOND_IN_MILLISECONDS);
         return new ChangeRepoResponse(changedRepos, latestEventId,latestEventTimeStamp);
     }
 
@@ -1353,6 +1360,14 @@ public class DefaultGitHubClient implements GitHubClient {
             }
         }
         return parentShas;
+    }
+
+    protected void sleep(long timeToWait) {
+        try {
+            Thread.sleep(timeToWait);
+        } catch (InterruptedException var4) {
+            LOG.error("Thread Interrupted ", var4);
+        }
     }
 
     /**

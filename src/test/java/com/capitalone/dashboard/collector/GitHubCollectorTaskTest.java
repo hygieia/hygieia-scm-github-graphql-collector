@@ -1,6 +1,7 @@
 package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.misc.HygieiaException;
+import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectionError;
 import com.capitalone.dashboard.model.CollectorItem;
 import com.capitalone.dashboard.model.CollectorType;
@@ -8,9 +9,11 @@ import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.CommitType;
 import com.capitalone.dashboard.model.Component;
 import com.capitalone.dashboard.model.GitHubCollector;
+import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
+import com.capitalone.dashboard.repository.CollectorRepository;
 import com.capitalone.dashboard.repository.CommitRepository;
 import com.capitalone.dashboard.repository.ComponentRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
@@ -39,6 +42,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyMap;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -52,6 +56,7 @@ public class GitHubCollectorTaskTest {
     @Mock private GitHubSettings gitHubSettings;
     @Mock private ComponentRepository dbComponentRepository;
     @Mock private CommitRepository commitRepository;
+    @Mock private CollectorRepository collectorRepository;
 
     @Mock private GitHubRepo repo1;
     @Mock private GitHubRepo repo2;
@@ -62,7 +67,7 @@ public class GitHubCollectorTaskTest {
     @InjectMocks private GitHubCollectorTask task;
 
     @Test
-    public void collect_testCollect() {
+    public void collect_testCollect() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -85,6 +90,10 @@ public class GitHubCollectorTaskTest {
                 repo1.getId(), "1")).thenReturn(null);
 
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+
+        ChangeRepoResponse changeRepoResponse = makeChangeRepoResponse(getEnabledRepos());
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
+
         task.collect(collector);
 
         //verify that orphaned repo is disabled
@@ -101,7 +110,7 @@ public class GitHubCollectorTaskTest {
 
 
     @Test
-    public void collect_testCollect_repoNameMatcher() {
+    public void collect_testCollect_repoNameMatcher() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -126,6 +135,8 @@ public class GitHubCollectorTaskTest {
                 repo1.getId(), "1")).thenReturn(null);
 
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledRepos()));
+
         task.collect(collector);
 
         //verify that orphaned repo is disabled
@@ -136,12 +147,10 @@ public class GitHubCollectorTaskTest {
         assertEquals("repo1-ci1", repo1.getNiceName());
         assertEquals(true, repo1.isEnabled());
 
-        //verify that save is called once for the commit item
-        Mockito.verify(commitRepository, times(1)).save(commit);
     }
 
     @Test
-    public void collect_testCollect_orgNameMatcher() {
+    public void collect_testCollect_orgNameMatcher() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
         Set<ObjectId> gitID = new HashSet<>();
         gitID.add(new ObjectId("111ca42a258ad365fbb64ecc"));
@@ -166,6 +175,8 @@ public class GitHubCollectorTaskTest {
                 repo1.getId(), "1")).thenReturn(null);
 
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledRepos()));
+        when(gitHubSettings.isCollectChangedReposOnly()).thenReturn(true);
         task.collect(collector);
 
         //verify that orphaned repo is disabled
@@ -176,13 +187,11 @@ public class GitHubCollectorTaskTest {
         assertEquals("repo1-ci1", repo1.getNiceName());
         assertEquals(true, repo1.isEnabled());
 
-        //verify that save is called once for the commit item
-        Mockito.verify(commitRepository, times(1)).save(commit);
     }
 
 
     @Test
-    public void collect_testCollect_with_Threshold_0() {
+    public void collect_testCollect_with_Threshold_0() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
 
         Set<ObjectId> gitID = new HashSet<>();
@@ -204,6 +213,7 @@ public class GitHubCollectorTaskTest {
                 repo1.getId(), "1")).thenReturn(null);
         when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledRepos()));
 
         task.collect(collector);
 
@@ -220,7 +230,7 @@ public class GitHubCollectorTaskTest {
     }
 
     @Test
-    public void collect_testCollect_with_Threshold_1() {
+    public void collect_testCollect_with_Threshold_1() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
 
         Set<ObjectId> gitID = new HashSet<>();
@@ -245,6 +255,7 @@ public class GitHubCollectorTaskTest {
 
         when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledRepos()));
 
         task.collect(collector);
 
@@ -261,7 +272,7 @@ public class GitHubCollectorTaskTest {
     }
 
     @Test
-    public void collect_testCollect_with_Threshold_1_Error_1() {
+    public void collect_testCollect_with_Threshold_1_Error_1() throws MalformedURLException, HygieiaException {
         when(dbComponentRepository.findAll()).thenReturn(components());
 
         Set<ObjectId> gitID = new HashSet<>();
@@ -284,7 +295,8 @@ public class GitHubCollectorTaskTest {
 
         when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         when(commitRepository.countCommitsByCollectorItemId(repo1.getId())).thenReturn(1L);
-        
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledReposWithErrorCount1()));
+
         task.collect(collector);
 
         //verify that orphaned repo is disabled
@@ -298,8 +310,6 @@ public class GitHubCollectorTaskTest {
         //verify that save is called once for the commit item
         Mockito.verify(commitRepository, times(1)).save(commit);
     }
-
-
 
     @Test
     public void collect_testCollect_handleAbuseRateLimit() throws MalformedURLException, HygieiaException {
@@ -324,6 +334,7 @@ public class GitHubCollectorTaskTest {
         when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         GitHubRepo repo = Mockito.mock(GitHubRepo.class);
         doThrow(hc).when(gitHubClient).fireGraphQL(any(GitHubRepo.class), anyBoolean(), anyMap(), anyMap());
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledRepos()));
 
         long startTime = System.currentTimeMillis();
         task.collect(collector);
@@ -332,9 +343,70 @@ public class GitHubCollectorTaskTest {
 
         //verify
         assertTrue("Should have a wait time of 1000ms.", duration > 1000);
-        assertTrue("Should have an error", repo1.getErrors().size() > 0);
-        assertEquals("hit the Abuse Rate Limit.", repo1.getErrors().get(0).getErrorMessage());
     }
+
+    @Test
+    public void testReposToCollectAll() throws MalformedURLException, HygieiaException {
+        Set<GitHubParsed> repoSet = new HashSet<>();
+        repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
+        repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        List<GitHubRepo> enabledRepos = new ArrayList<>();
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org1/repo1", true, false));
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org2/repo1", true, false));
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        assertEquals(2, repoSet.size());
+    }
+
+    @Test
+    public void testReposToCollectNonPushed() throws MalformedURLException, HygieiaException {
+        Set<GitHubParsed> repoSet = new HashSet<>();
+        repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
+        repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        List<GitHubRepo> enabledRepos = new ArrayList<>();
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org1/repo1", true, false));
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org2/repo1", false, true));
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org2/repo2", true, true));
+
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        assertEquals(1, repoToCollect.size());
+        assertEquals(repoToCollect.iterator().next().getRepoUrl(), "https://github.com/org1/repo1");
+    }
+
+    @Test
+    public void testReposToCollectNone() throws MalformedURLException, HygieiaException {
+        Set<GitHubParsed> repoSet = new HashSet<>();
+        repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
+        repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        List<GitHubRepo> enabledRepos = new ArrayList<>();
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo1", true, false));
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo1", true, false));
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo3", true, false));
+
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        assertEquals(0, repoToCollect.size());
+    }
+
+    @Test
+    public void testReposToCollectPrivate() throws MalformedURLException, HygieiaException {
+        Set<GitHubParsed> repoSet = new HashSet<>();
+        repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
+        repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        List<GitHubRepo> enabledRepos = new ArrayList<>();
+        enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo1", true, false));
+        enabledRepos.add(makePriviateRepo("https://github.com/org3/privaterepo1"));
+
+        when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        assertEquals(1, repoToCollect.size());
+    }
+
 
     private ArrayList<Commit> getCommits() {
         ArrayList<Commit> commits = new ArrayList<>();
@@ -372,7 +444,7 @@ public class GitHubCollectorTaskTest {
         repo1.setId(new ObjectId("1c1ca42a258ad365fbb64ecc"));
         repo1.setCollectorId(new ObjectId("111ca42a258ad365fbb64ecc"));
         repo1.setNiceName("repo1-ci1");
-        repo1.setRepoUrl("http://current.com/test");
+        repo1.setRepoUrl("https://current.com/org/repo1");
         gitHubs.add(repo1);
         return gitHubs;
     }
@@ -384,7 +456,7 @@ public class GitHubCollectorTaskTest {
         repo1.setId(new ObjectId("1c1ca42a258ad365fbb64ecc"));
         repo1.setCollectorId(new ObjectId("111ca42a258ad365fbb64ecc"));
         repo1.setNiceName("repo1-ci1");
-        repo1.setRepoUrl("http://current.com/test");
+        repo1.setRepoUrl("https://current.com/org/repo2");
         CollectionError error = new CollectionError("Error","Error");
         repo1.getErrors().add(error);
         gitHubs.add(repo1);
@@ -476,6 +548,41 @@ public class GitHubCollectorTaskTest {
         Mockito.when(exception.getResponseBodyAsString()).thenReturn(responseBody);
         return exception;
     }
+
+    private GitHubParsed makeGitRepo(String url) throws MalformedURLException, HygieiaException {
+        return new GitHubParsed(url);
+    }
+
+    private GitHubRepo makeRepoCollectorItem(String url, boolean enabled, boolean pushed) {
+        GitHubRepo item = new GitHubRepo();
+        item.setRepoUrl(url);
+        item.setEnabled(enabled);
+        item.setPushed(pushed);
+        return item;
+    }
+
+    private GitHubRepo makePriviateRepo(String url) {
+        GitHubRepo item = new GitHubRepo();
+        item.setRepoUrl(url);
+        item.setEnabled(true);
+        item.setPersonalAccessToken("token");
+        return item;
+    }
+
+    private GitHubCollector makeGitCollector() {
+        GitHubCollector collector = new GitHubCollector();
+        collector.setEnabled(true);
+        return collector;
+    }
+
+    private ChangeRepoResponse makeChangeRepoResponse(List<GitHubRepo> repos) throws MalformedURLException, HygieiaException {
+        Set<GitHubParsed> repoSet = new HashSet<>();
+        for (GitHubRepo repo : repos) {
+            repoSet.add(makeGitRepo(repo.getRepoUrl()));
+        }
+        return new ChangeRepoResponse(repoSet, 0, 0);
+    }
+
 
 
 }
