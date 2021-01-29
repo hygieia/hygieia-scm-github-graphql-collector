@@ -47,7 +47,6 @@ public class DefaultGitHubClientTest {
     public void init() {
         when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new GitHubSettings();
-//        settings.setBaseApiUrl("github.com/api/");
         defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier));
         defaultGitHubClient.setLdapMap(new HashMap<>());
 
