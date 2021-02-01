@@ -94,6 +94,10 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
     @Override
     public GitHubCollector getCollector() {
         GitHubCollector existingCollector = null;
+        /**
+         * ClassCastException maybe happen when first migrating from collector to Github collector, once we run the collector
+         * the data will get updated
+          */
         try {
             existingCollector = collectorRepository.findByName("GitHub");
         } catch (ClassCastException ignore) {}
