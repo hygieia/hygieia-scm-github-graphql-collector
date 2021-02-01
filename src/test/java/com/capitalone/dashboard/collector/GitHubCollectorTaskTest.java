@@ -350,12 +350,12 @@ public class GitHubCollectorTaskTest {
         Set<GitHubParsed> repoSet = new HashSet<>();
         repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
         repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
-        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0, 0,0);
         List<GitHubRepo> enabledRepos = new ArrayList<>();
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org1/repo1", true, false));
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org2/repo1", true, false));
         when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
-        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos, changeRepoResponse);
         assertEquals(2, repoSet.size());
     }
 
@@ -364,14 +364,14 @@ public class GitHubCollectorTaskTest {
         Set<GitHubParsed> repoSet = new HashSet<>();
         repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
         repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
-        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0, 0, 0);
         List<GitHubRepo> enabledRepos = new ArrayList<>();
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org1/repo1", true, false));
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org2/repo1", false, true));
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org2/repo2", true, true));
 
         when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
-        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos, changeRepoResponse);
         assertEquals(1, repoToCollect.size());
         assertEquals(repoToCollect.iterator().next().getRepoUrl(), "https://github.com/org1/repo1");
     }
@@ -381,14 +381,14 @@ public class GitHubCollectorTaskTest {
         Set<GitHubParsed> repoSet = new HashSet<>();
         repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
         repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
-        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0, 0, 0);
         List<GitHubRepo> enabledRepos = new ArrayList<>();
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo1", true, false));
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo1", true, false));
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo3", true, false));
 
         when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
-        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos, changeRepoResponse);
         assertEquals(0, repoToCollect.size());
     }
 
@@ -397,13 +397,13 @@ public class GitHubCollectorTaskTest {
         Set<GitHubParsed> repoSet = new HashSet<>();
         repoSet.add(makeGitRepo("https://github.com/org1/repo1"));
         repoSet.add(makeGitRepo("https://github.com/org2/repo1"));
-        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0);
+        ChangeRepoResponse changeRepoResponse = new ChangeRepoResponse(repoSet, 0, 0, 0, 0);
         List<GitHubRepo> enabledRepos = new ArrayList<>();
         enabledRepos.add(makeRepoCollectorItem("https://github.com/org3/repo1", true, false));
         enabledRepos.add(makePriviateRepo("https://github.com/org3/privaterepo1"));
 
         when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(changeRepoResponse);
-        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos);
+        Set<GitHubRepo> repoToCollect = task.reposToCollect(makeGitCollector(), enabledRepos, changeRepoResponse);
         assertEquals(1, repoToCollect.size());
     }
 
@@ -580,7 +580,7 @@ public class GitHubCollectorTaskTest {
         for (GitHubRepo repo : repos) {
             repoSet.add(makeGitRepo(repo.getRepoUrl()));
         }
-        return new ChangeRepoResponse(repoSet, 0, 0);
+        return new ChangeRepoResponse(repoSet, 0, 0, 0 , 0);
     }
 
 

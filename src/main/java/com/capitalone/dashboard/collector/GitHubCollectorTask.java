@@ -66,6 +66,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
     private final GitHubSettings gitHubSettings;
     private final ComponentRepository dbComponentRepository;
     private static final long ONE_DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
+    private static final long ONE_SECOND_IN_MILLISECONDS = 1000;
     private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * ONE_DAY_MILLISECONDS;
     private static final String REPO_NAME = "repoName";
     private static final String ORG_NAME = "orgName";
@@ -190,10 +191,15 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         setupProxy();
         clean(collector);
         List<GitHubRepo> enabledRepos = enabledRepos(collector);
-
+        ChangeRepoResponse changeRepoResponse = null;
         if (gitHubSettings.isCollectChangedReposOnly()) {
-            Set<GitHubRepo> changedRepos = reposToCollect(collector, enabledRepos);
-            enabledRepos = new ArrayList<>(changedRepos);
+            try {
+                changeRepoResponse = gitHubClient.getChangedRepos(collector.getLatestProcessedEventId(), collector.getLatestProcessedEventTimestamp());
+                Set<GitHubRepo> changedRepos = reposToCollect(collector, enabledRepos, changeRepoResponse);
+                enabledRepos = new ArrayList<>(changedRepos);
+            } catch (MalformedURLException | HygieiaException e) {
+                LOG.error("Error fetching changed repos:", e);
+            }
         }
 
         if (gitHubSettings.getSearchCriteria() != null) {
@@ -208,31 +214,34 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
         collectProcess(collector, enabledRepos);
 
+        if (changeRepoResponse != null) {
+            long processTime = System.currentTimeMillis() - changeRepoResponse.getLastFetchTimestamp();
+            long waitTime = changeRepoResponse.getPollIntervalWaitTime() * ONE_SECOND_IN_MILLISECONDS;
+            if (processTime < waitTime) {
+                long diff = waitTime - processTime;
+                LOG.info(String.format("Waiting for Github event poll interval : %s milliseconds", diff));
+                sleep(diff);
+            }
+        }
+
         collectorRepository.save(collector);
     }
 
-    public Set<GitHubRepo> reposToCollect(GitHubCollector collector, List<GitHubRepo> enabledRepos) {
-        Set<GitHubRepo> repoSet = new HashSet<>();
-        try {
-            ChangeRepoResponse changeRepoResponse = gitHubClient.getChangedRepos(collector.getLatestProcessedEventId(), collector.getLatestProcessedEventTimestamp());
-            Set<GitHubParsed> changeRepos = changeRepoResponse.getChangeRepos();
-            Map<String, GitHubParsed> changedReposMap = changeRepos.stream().collect(Collectors.toMap(g -> g.getUrl().toLowerCase(), Function.identity()));
-            repoSet = enabledRepos.stream().filter(e -> changedReposMap.containsKey(e.getRepoUrl().toLowerCase()) && !e.isPushed()).collect(Collectors.toSet());
-            collector.setLatestProcessedEventId(changeRepoResponse.getLatestEventId());
-            collector.setLatestProcessedEventTimestamp(changeRepoResponse.getLatestEventTimestamp());
-            if ((System.currentTimeMillis() - collector.getLastPrivateRepoCollectionTimestamp() > gitHubSettings.getPrivateRepoCollectionTime())) {
-                Set<GitHubRepo> privateRepos = enabledRepos
-                        .stream()
-                        .filter(e -> ((!StringUtils.isEmpty(e.getPassword()) && !StringUtils.isEmpty(e.getUserId()))
-                                || !StringUtils.isEmpty(e.getPersonalAccessToken())))
-                        .collect(Collectors.toSet());
+    public Set<GitHubRepo> reposToCollect(GitHubCollector collector, List<GitHubRepo> enabledRepos, ChangeRepoResponse changeRepoResponse) {
+        Set<GitHubParsed> changeRepos = changeRepoResponse.getChangeRepos();
+        Map<String, GitHubParsed> changedReposMap = changeRepos.stream().collect(Collectors.toMap(g -> g.getUrl().toLowerCase(), Function.identity()));
+        Set<GitHubRepo> repoSet = enabledRepos.stream().filter(e -> changedReposMap.containsKey(e.getRepoUrl().toLowerCase()) && !e.isPushed()).collect(Collectors.toSet());
+        collector.setLatestProcessedEventId(changeRepoResponse.getLatestEventId());
+        collector.setLatestProcessedEventTimestamp(changeRepoResponse.getLatestEventTimestamp());
+        if ((System.currentTimeMillis() - collector.getLastPrivateRepoCollectionTimestamp() > gitHubSettings.getPrivateRepoCollectionTime())) {
+            Set<GitHubRepo> privateRepos = enabledRepos
+                    .stream()
+                    .filter(e -> ((!StringUtils.isEmpty(e.getPassword()) && !StringUtils.isEmpty(e.getUserId()))
+                            || !StringUtils.isEmpty(e.getPersonalAccessToken())))
+                    .collect(Collectors.toSet());
 
-                repoSet.addAll(privateRepos);
-                collector.setLastPrivateRepoCollectionTimestamp(System.currentTimeMillis());
-            }
-            return repoSet;
-        } catch (MalformedURLException | HygieiaException e) {
-            LOG.error("Error fetching changed repos:", e);
+            repoSet.addAll(privateRepos);
+            collector.setLastPrivateRepoCollectionTimestamp(System.currentTimeMillis());
         }
         return repoSet;
     }

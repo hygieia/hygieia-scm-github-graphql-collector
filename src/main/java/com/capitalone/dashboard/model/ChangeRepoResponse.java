@@ -7,11 +7,15 @@ public class ChangeRepoResponse {
     Set<GitHubParsed> changeRepos;
     long latestEventId;
     long latestEventTimestamp;
+    long lastFetchTimestamp;
+    long pollIntervalWaitTime;
 
-    public ChangeRepoResponse(Set<GitHubParsed> changeRepos, long latestEventId, long latestEventTimestamp) {
+    public ChangeRepoResponse(Set<GitHubParsed> changeRepos, long latestEventId, long latestEventTimestamp, long lastFetchTimestamp, long pollIntervalWaitTime) {
         this.changeRepos = changeRepos;
         this.latestEventId = latestEventId;
         this.latestEventTimestamp = latestEventTimestamp;
+        this.lastFetchTimestamp = lastFetchTimestamp;
+        this.pollIntervalWaitTime = pollIntervalWaitTime;
     }
 
     public Set<GitHubParsed> getChangeRepos() {
@@ -36,5 +40,21 @@ public class ChangeRepoResponse {
 
     public void setLatestEventTimestamp(long latestEventTimestamp) {
         this.latestEventTimestamp = latestEventTimestamp;
+    }
+
+    public long getLastFetchTimestamp() {
+        return lastFetchTimestamp;
+    }
+
+    public void setLastFetchTimestamp(long lastFetchTimestamp) {
+        this.lastFetchTimestamp = lastFetchTimestamp;
+    }
+
+    public long getPollIntervalWaitTime() {
+        return pollIntervalWaitTime;
+    }
+
+    public void setPollIntervalWaitTime(long pollIntervalWaitTime) {
+        this.pollIntervalWaitTime = pollIntervalWaitTime;
     }
 }
