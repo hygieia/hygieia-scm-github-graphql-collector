@@ -41,8 +41,8 @@ public class GitHubRepo extends CollectorItem {
 
     public void setType(String type) { getOptions().put(TYPE, type); }
 
-    public static String getPersonalAccessToken() {
-        return PERSONAL_ACCESS_TOKEN;
+    public String getPersonalAccessToken() {
+        return (String) getOptions().get(PERSONAL_ACCESS_TOKEN);
     }
 
     public void setPersonalAccessToken(String personalAccessToken) {

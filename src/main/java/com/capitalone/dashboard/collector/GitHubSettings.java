@@ -56,6 +56,12 @@ public class GitHubSettings {
 
 	private String proxyPassword;
 
+	@Value("${github.privateRepoCollectionTime:600000}")
+	private long privateRepoCollectionTime; //private repos will be collected in these many milliseconds.
+
+    @Value("${github.collectChangedReposOnly:true}")
+    private boolean collectChangedReposOnly;
+
 	public String getCron() {
 		return cron;
 	}
@@ -196,4 +202,20 @@ public class GitHubSettings {
 	public void setSearchCriteria(String searchCriteria) {
 		this.searchCriteria = searchCriteria;
 	}
+
+	public long getPrivateRepoCollectionTime() {
+		return privateRepoCollectionTime;
+	}
+
+	public void setPrivateRepoCollectionTime(long privateRepoCollectionTime) {
+		this.privateRepoCollectionTime = privateRepoCollectionTime;
+	}
+
+    public boolean isCollectChangedReposOnly() {
+        return collectChangedReposOnly;
+    }
+
+    public void setCollectChangedReposOnly(boolean collectChangedReposOnly) {
+        this.collectChangedReposOnly = collectChangedReposOnly;
+    }
 }
