@@ -5,6 +5,8 @@ import com.capitalone.dashboard.client.RestUserInfo;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectionMode;
+import com.capitalone.dashboard.model.CollectorItemMetadata;
+import com.capitalone.dashboard.model.CollectorType;
 import com.capitalone.dashboard.model.Comment;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.CommitStatus;
@@ -1366,6 +1368,64 @@ public class DefaultGitHubClient implements GitHubClient {
             LOG.error("Thread Interrupted ", var4);
         }
     }
+
+    @Override
+    public CollectorItemMetadata getMetadata(GitHubRepo repo) throws MalformedURLException, HygieiaException {
+        CollectorItemMetadata collectorItemMetadata = new CollectorItemMetadata();
+        String repoUrl = (String) repo.getOptions().get("url");
+        GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
+        String decryptedPassword = decryptString(repo.getPassword(), settings.getKey());
+        String personalAccessToken = (String) repo.getOptions().get("personalAccessToken");
+        String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey());
+        JSONObject query = buildMetadataQuery(gitHubParsed);
+        JSONObject data = getDataFromRestCallPost(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, query);
+        if (data == null) return null;
+        JSONObject repository = (JSONObject) data.get("repository");
+        if (repository == null) return null;
+        collectorItemMetadata.getMetadata().put("url", str(repository, "url"));
+        collectorItemMetadata.getMetadata().put("defaultBranch", str((JSONObject) repository.get("defaultBranchRef"), "name"));
+        collectorItemMetadata.getMetadata().put("primaryLanguage", str((JSONObject) repository.get("primaryLanguage"), "name"));
+
+        JSONObject languages = (JSONObject) repository.get("languages");
+        JSONArray nodes = getArray(languages, "nodes");
+        List<String> languageList = new ArrayList<>();
+        if(CollectionUtils.isNotEmpty(nodes)) {
+            for (Object n : nodes) {
+                JSONObject node = (JSONObject) n;
+                languageList.add(str(node, "name"));
+            }
+            if(CollectionUtils.isNotEmpty(languageList)){
+                collectorItemMetadata.getMetadata().put("languages", languageList);
+            }
+        }
+
+        collectorItemMetadata.getMetadata().put("forkCount", NumberUtils.toInt(str(repository, "forkCount")));
+        collectorItemMetadata.getMetadata().put("private", str(repository, "isPrivate"));
+        collectorItemMetadata.getMetadata().put("archived", str(repository, "isArchived"));
+        collectorItemMetadata.getMetadata().put("disabled", str(repository, "isDisabled"));
+        collectorItemMetadata.getMetadata().put("configuredBranch", repo.getBranch());
+        collectorItemMetadata.getMetadata().put("configuredUrl", repo.getRepoUrl());
+        collectorItemMetadata.getMetadata().put("type", repo.getOptions().get("type"));
+        collectorItemMetadata.setCollectorId(repo.getCollectorId());
+        collectorItemMetadata.setCollectorItemId(repo.getId());
+        collectorItemMetadata.setCollectorType(CollectorType.SCM);
+        collectorItemMetadata.setLastUpdated(System.currentTimeMillis());
+        return collectorItemMetadata;
+    }
+
+    private JSONObject buildMetadataQuery(GitHubParsed gitHubParsed) {
+
+        JSONObject variableJSON = new JSONObject();
+        variableJSON.put("owner", gitHubParsed.getOrgName());
+        variableJSON.put("name", gitHubParsed.getRepoName());
+
+        JSONObject jsonObj = new JSONObject();
+        jsonObj.put("query", GithubGraphQLQuery.QUERY_REPO_METADATA);
+        jsonObj.put("variables", variableJSON.toString());
+
+        return jsonObj;
+    }
+
 
     /**
      * Decrypt string

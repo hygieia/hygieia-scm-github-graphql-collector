@@ -2,6 +2,7 @@ package com.capitalone.dashboard.collector;
 
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.ChangeRepoResponse;
+import com.capitalone.dashboard.model.CollectorItemMetadata;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.GitHubRateLimit;
 import com.capitalone.dashboard.model.GitHubRepo;
@@ -30,4 +31,6 @@ public interface GitHubClient {
     boolean isUnderRateLimit();
 
     long getRepoOffsetTime(GitHubRepo repo);
+
+    CollectorItemMetadata getMetadata (GitHubRepo repo) throws MalformedURLException, HygieiaException;
 }
