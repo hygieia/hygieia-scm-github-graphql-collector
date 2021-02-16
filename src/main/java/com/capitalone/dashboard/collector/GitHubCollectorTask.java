@@ -7,6 +7,7 @@ import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectionError;
 import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.CollectorItem;
+import com.capitalone.dashboard.model.CollectorItemMetadata;
 import com.capitalone.dashboard.model.CollectorType;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.GitHubCollector;
@@ -14,6 +15,7 @@ import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
+import com.capitalone.dashboard.repository.CollectorItemMetadataRepository;
 import com.capitalone.dashboard.repository.CommitRepository;
 import com.capitalone.dashboard.repository.ComponentRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
@@ -65,6 +67,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
     private final GitHubClient gitHubClient;
     private final GitHubSettings gitHubSettings;
     private final ComponentRepository dbComponentRepository;
+    private final CollectorItemMetadataRepository collectorItemMetadataRepository;
     private static final long ONE_DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
     private static final long ONE_SECOND_IN_MILLISECONDS = 1000;
     private static final long FOURTEEN_DAYS_MILLISECONDS = 14 * ONE_DAY_MILLISECONDS;
@@ -81,7 +84,8 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                                GitRequestRepository gitRequestRepository,
                                GitHubClient gitHubClient,
                                GitHubSettings gitHubSettings,
-                               ComponentRepository dbComponentRepository) {
+                               ComponentRepository dbComponentRepository,
+                               CollectorItemMetadataRepository collectorItemMetadataRepository) {
         super(taskScheduler, "GitHub");
         this.collectorRepository = collectorRepository;
         this.gitHubRepoRepository = gitHubRepoRepository;
@@ -90,6 +94,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         this.gitHubSettings = gitHubSettings;
         this.dbComponentRepository = dbComponentRepository;
         this.gitRequestRepository = gitRequestRepository;
+        this.collectorItemMetadataRepository = collectorItemMetadataRepository;
     }
 
     @Override
@@ -337,7 +342,13 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                         CollectionError error = new CollectionError(String.valueOf(he.getErrorCode()), he.getMessage());
                         repo.getErrors().add(error);
                     }
+
+
+                    //save the collectorItem
                     gitHubRepoRepository.save(repo);
+
+                    //enrich the metadata
+                    enrichMetadata(repo);
                 }
             } catch (Throwable e) {
                 statusString = String.format("EXCEPTION, %s", e.getClass().getCanonicalName());
@@ -356,6 +367,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
 
         collector.setLastExecutionRecordCount(repoCount + pullCount + commitCount + issueCount);
+        collector.setLastExecuted(elapsedSeconds);
     }
 
 
@@ -386,6 +398,8 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             }
         }
     }
+
+
 
     // Retrieves a st of previous commits and Pulls and tries to reconnect them
     private void processOrphanCommits(GitHubRepo repo) {
@@ -486,6 +500,19 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
     private boolean isNewCommit(GitHubRepo repo, Commit commit) {
         return commitRepository.findByCollectorItemIdAndScmRevisionNumber(
                 repo.getId(), commit.getScmRevisionNumber()) == null;
+    }
+
+    // Get Metadata for repo
+    private void enrichMetadata(GitHubRepo repo) {
+        try {
+            CollectorItemMetadata collectorItemMetadata = gitHubClient.getMetadata(repo);
+            if (Objects.isNull(collectorItemMetadata) || Objects.isNull(collectorItemMetadata.getCollectorItemId()))
+                return;
+            collectorItemMetadataRepository.save(collectorItemMetadata);
+        }
+        catch (Exception e) {
+            LOG.info("Exception occurred while retrieving CI Metadata : " + e.getMessage());
+        }
     }
 }
 
