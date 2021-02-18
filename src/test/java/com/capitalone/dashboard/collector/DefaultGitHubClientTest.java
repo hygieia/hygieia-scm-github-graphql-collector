@@ -6,7 +6,7 @@ import com.capitalone.dashboard.collector.DefaultGitHubClient.RedirectedStatus;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.GitHubParsed;
-import com.capitalone.dashboard.model.GitHubRepo;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.google.common.io.Resources;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;

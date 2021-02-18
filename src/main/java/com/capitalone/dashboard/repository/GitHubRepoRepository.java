@@ -1,6 +1,6 @@
 package com.capitalone.dashboard.repository;
 
-import com.capitalone.dashboard.model.GitHubRepo;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.Query;
 

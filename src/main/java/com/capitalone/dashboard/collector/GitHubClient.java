@@ -5,8 +5,8 @@ import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectorItemMetadata;
 import com.capitalone.dashboard.model.Commit;
 import com.capitalone.dashboard.model.GitHubRateLimit;
-import com.capitalone.dashboard.model.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 
 import java.net.MalformedURLException;
 import java.util.List;
