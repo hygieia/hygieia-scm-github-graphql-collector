@@ -14,7 +14,7 @@ import com.capitalone.dashboard.model.CommitType;
 import com.capitalone.dashboard.model.GitHubPaging;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
-import com.capitalone.dashboard.model.GitHubRepo;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.model.MergeEvent;
 import com.capitalone.dashboard.model.Review;

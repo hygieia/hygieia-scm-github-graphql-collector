@@ -3,7 +3,7 @@ package com.capitalone.dashboard.controller;
 import com.capitalone.dashboard.collector.GitHubCollectorTask;
 import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.Collector;
-import com.capitalone.dashboard.model.GitHubRepo;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.service.GitHubService;

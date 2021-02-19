@@ -1,5 +1,6 @@
 package com.capitalone.dashboard.model;
 
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import org.junit.Before;
 import org.junit.Test;
 

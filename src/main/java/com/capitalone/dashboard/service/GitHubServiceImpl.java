@@ -1,8 +1,8 @@
 package com.capitalone.dashboard.service;
 
 import com.capitalone.dashboard.collector.GitHubCollectorTask;
-import com.capitalone.dashboard.model.Collector;
-import com.capitalone.dashboard.model.GitHubRepo;
+import com.capitalone.dashboard.model.GitHubCollector;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import org.apache.commons.collections.CollectionUtils;
@@ -20,12 +20,12 @@ import java.util.Objects;
 public class GitHubServiceImpl implements GitHubService {
     private static final Log LOG = LogFactory.getLog(GitHubServiceImpl.class);
 
-    private final BaseCollectorRepository<Collector> collectorRepository;
+    private final BaseCollectorRepository<GitHubCollector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
     private static final String GITHUB_COLLECTOR_NAME = "GitHub";
 
     @Autowired
-    public GitHubServiceImpl(BaseCollectorRepository<Collector> collectorRepository,
+    public GitHubServiceImpl(BaseCollectorRepository<GitHubCollector> collectorRepository,
                              GitHubRepoRepository gitHubRepoRepository,
                              GitHubCollectorTask gitHubCollectorTask) {
         this.collectorRepository = collectorRepository;
@@ -33,7 +33,7 @@ public class GitHubServiceImpl implements GitHubService {
     }
 
     public ResponseEntity<String> cleanup() {
-        Collector collector = collectorRepository.findByName(GITHUB_COLLECTOR_NAME);
+        GitHubCollector collector = collectorRepository.findByName(GITHUB_COLLECTOR_NAME);
         if (Objects.isNull(collector))
             return ResponseEntity.status(HttpStatus.OK).body(GITHUB_COLLECTOR_NAME + " collector is not found");
         List<GitHubRepo> repos = gitHubRepoRepository.findObsoleteGitHubRepos(collector.getId());

@@ -11,7 +11,7 @@ import com.capitalone.dashboard.model.Component;
 import com.capitalone.dashboard.model.GitHubCollector;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
-import com.capitalone.dashboard.model.GitHubRepo;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.repository.CollectorRepository;
 import com.capitalone.dashboard.repository.CommitRepository;
