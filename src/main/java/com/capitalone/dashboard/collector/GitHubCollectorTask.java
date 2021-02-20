@@ -108,6 +108,8 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             existingCollector = collectorRepository.findByName("GitHub");
         } catch (ClassCastException ignore) {}
 
+        if(!Objects.isNull(existingCollector)) return existingCollector;
+
         GitHubCollector protoType = new GitHubCollector();
         protoType.setName("GitHub");
         protoType.setCollectorType(CollectorType.SCM);
@@ -128,13 +130,6 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         uniqueOptions.put(GitHubRepo.BRANCH, "");
         protoType.setUniqueFields(uniqueOptions);
 
-        if (existingCollector != null) {
-            protoType.setLastPrivateRepoCollectionTimestamp(existingCollector.getLastPrivateRepoCollectionTimestamp());
-            protoType.setLastCleanUpTimestamp(existingCollector.getLastCleanUpTimestamp());
-            protoType.setLastExecutionRecordCount(existingCollector.getLastExecutionRecordCount());
-            protoType.setLatestProcessedEventId((existingCollector).getLatestProcessedEventId());
-            protoType.setLatestProcessedEventTimestamp((existingCollector).getLatestProcessedEventTimestamp());
-        }
         return protoType;
     }
 
@@ -216,7 +211,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             }
         }
         LOG.info("GitHubCollectorTask:collect start, total enabledRepos=" + enabledRepos.size());
-        LOG.warn("error threshold = " + gitHubSettings.getErrorThreshold());
+        LOG.warn("error threshold error_threshold=" + gitHubSettings.getErrorThreshold());
         collectProcess(collector, enabledRepos);
 
         if (changeRepoResponse != null) {
@@ -367,7 +362,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                 elapsedSeconds, repoCount, pullCount, commitCount, issueCount));
 
         collector.setLastExecutionRecordCount(repoCount + pullCount + commitCount + issueCount);
-        collector.setLastExecuted(elapsedSeconds);
+        collector.setLastExecutedSeconds(elapsedSeconds);
     }
 
 
@@ -412,7 +407,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                 new DateTime(c.getScmCommitTimestamp()).toString("yyyy-MM-dd hh:mm:ss.SSa") + " with pull " + c.getPullNumber()));
         long start = System.currentTimeMillis();
         commitRepository.save(orphanSaveList);
-        LOG.info("-- Saved Orphan Commits= " + orphanSaveList.size() + "; Duration= " + (System.currentTimeMillis() - start) + " milliseconds");
+        LOG.info("-- Saved Orphan Commits= " + orphanSaveList.size() + ", Duration= " + (System.currentTimeMillis() - start) + " milliseconds");
     }
 
     /**
@@ -446,7 +441,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                 }
             }
         }
-        LOG.info("-- Saved Commits = " + count + "; Duration = " + (System.currentTimeMillis() - start) + " milliseconds");
+        LOG.info("-- Saved Commits saved_commits=" + count + ", saved_commits_duration=" + (System.currentTimeMillis() - start) + " milliseconds");
         return count;
     }
 
@@ -478,7 +473,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             }
             gitRequestRepository.save(entry);
         }
-        LOG.info("-- Saved " + type + ':' + count + (isPull ? (" " + pullNumbers) : ""));
+        LOG.info("-- Saved " + type + '=' + count + (isPull ? pullNumbers : 0));
         return count;
     }
 
@@ -505,13 +500,20 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
     // Get Metadata for repo
     private void enrichMetadata(GitHubRepo repo) {
         try {
-            CollectorItemMetadata collectorItemMetadata = gitHubClient.getMetadata(repo);
-            if (Objects.isNull(collectorItemMetadata) || Objects.isNull(collectorItemMetadata.getCollectorItemId()))
-                return;
+            CollectorItemMetadata collectorItemMetadata = collectorItemMetadataRepository
+                    .findDistinctTopByCollectorIdAndCollectorItemId(repo.getCollectorId(), repo.getId());
+
+            if(collectorItemMetadata == null) {
+                collectorItemMetadata = new CollectorItemMetadata();
+            }
+
+            gitHubClient.fetchMetadata(repo, collectorItemMetadata);
+
+            if (Objects.isNull(collectorItemMetadata)) return;
             collectorItemMetadataRepository.save(collectorItemMetadata);
         }
         catch (Exception e) {
-            LOG.info("Exception occurred while retrieving CI Metadata : " + e.getMessage());
+            LOG.info("Exception occurred while retrieving Metadata error_metadata_repo="+ repo.getRepoUrl() + ", message=" + e.getMessage());
         }
     }
 }

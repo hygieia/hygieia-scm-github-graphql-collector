@@ -32,5 +32,5 @@ public interface GitHubClient {
 
     long getRepoOffsetTime(GitHubRepo repo);
 
-    CollectorItemMetadata getMetadata (GitHubRepo repo) throws MalformedURLException, HygieiaException;
+    void fetchMetadata (GitHubRepo repo, CollectorItemMetadata collectorItemMetadata) throws MalformedURLException, HygieiaException;
 }

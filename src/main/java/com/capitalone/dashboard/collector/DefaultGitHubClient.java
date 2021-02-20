@@ -14,10 +14,10 @@ import com.capitalone.dashboard.model.CommitType;
 import com.capitalone.dashboard.model.GitHubPaging;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
-import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.model.MergeEvent;
 import com.capitalone.dashboard.model.Review;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.Encryption;
 import com.capitalone.dashboard.util.EncryptionException;
@@ -273,9 +273,9 @@ public class DefaultGitHubClient implements GitHubClient {
         authorTypeMap = new HashMap<>();
         long historyTimeStamp = getTimeStampMills(getRunDate(repo, firstRun, false));
 
-        String decryptedPassword = decryptString(repo.getPassword(), settings.getKey());
+        String decryptedPassword = decryptString(repo.getPassword(), settings.getKey(), GitHubRepo.PASSWORD, repo);
         String personalAccessToken = (String) repo.getOptions().get("personalAccessToken");
-        String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey());
+        String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey(), GitHubRepo.PERSONAL_ACCESS_TOKEN, repo);
         boolean alldone = false;
 
         GitHubPaging dummyPRPaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingPRMap, "pull", firstRun);
@@ -377,7 +377,7 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONObject queryJSONBody = parseAsObject(response);
         String repoUrl = str(queryJSONBody, "html_url");
         if (!repoUrl.equals(repo.getRepoUrl())) {
-            LOG.info("original url: " + repo.getRepoUrl() + " is redirected to new url: " + repoUrl);
+            LOG.info("original_url=" + repo.getRepoUrl() + ", redirected_url: " + repoUrl);
             return new RedirectedStatus(true, repoUrl);
         }
         return new RedirectedStatus();
@@ -1151,7 +1151,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 authorTypeMap.put(user, authorTypeStr);
             }
         } catch (MalformedURLException | HygieiaException | RestClientException e) {
-            LOG.error("Error getting LDAP_DN For user " + user, e);
+            LOG.error("Error getting LDAP_DN  ldap_error_user=" + user, e);
         }
     }
 
@@ -1370,18 +1370,24 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     @Override
-    public CollectorItemMetadata getMetadata(GitHubRepo repo) throws MalformedURLException, HygieiaException {
-        CollectorItemMetadata collectorItemMetadata = new CollectorItemMetadata();
+    public void fetchMetadata(GitHubRepo repo, CollectorItemMetadata collectorItemMetadata) throws MalformedURLException, HygieiaException {
+
         String repoUrl = (String) repo.getOptions().get("url");
         GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
-        String decryptedPassword = decryptString(repo.getPassword(), settings.getKey());
+        String decryptedPassword = decryptString(repo.getPassword(), settings.getKey(), GitHubRepo.PASSWORD, repo);
         String personalAccessToken = (String) repo.getOptions().get("personalAccessToken");
-        String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey());
+        String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey(), GitHubRepo.PERSONAL_ACCESS_TOKEN, repo);
         JSONObject query = buildMetadataQuery(gitHubParsed);
         JSONObject data = getDataFromRestCallPost(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, query);
-        if (data == null) return null;
+        if (data == null) {
+            collectorItemMetadata = null;
+            return;
+        }
         JSONObject repository = (JSONObject) data.get("repository");
-        if (repository == null) return null;
+        if (repository == null) {
+            collectorItemMetadata = null;
+            return;
+        }
         collectorItemMetadata.getMetadata().put("url", str(repository, "url"));
         collectorItemMetadata.getMetadata().put("defaultBranch", str((JSONObject) repository.get("defaultBranchRef"), "name"));
         collectorItemMetadata.getMetadata().put("primaryLanguage", str((JSONObject) repository.get("primaryLanguage"), "name"));
@@ -1410,7 +1416,6 @@ public class DefaultGitHubClient implements GitHubClient {
         collectorItemMetadata.setCollectorItemId(repo.getId());
         collectorItemMetadata.setCollectorType(CollectorType.SCM);
         collectorItemMetadata.setLastUpdated(System.currentTimeMillis());
-        return collectorItemMetadata;
     }
 
     private JSONObject buildMetadataQuery(GitHubParsed gitHubParsed) {
@@ -1434,13 +1439,13 @@ public class DefaultGitHubClient implements GitHubClient {
      * @param key
      * @return String
      */
-    private static String decryptString(String string, String key) {
+    private static String decryptString(String string, String key, String type, GitHubRepo repo) {
         if (!StringUtils.isEmpty(string)) {
             try {
                 return Encryption.decryptString(
                         string, key);
             } catch (EncryptionException e) {
-                LOG.error(e.getMessage());
+                LOG.error("Error Decrypting " + type + " for repo=" + repo.getRepoUrl() + ", collectorItem=" + repo.getId() + ", message=" + e.getMessage());
             }
         }
         return "";
