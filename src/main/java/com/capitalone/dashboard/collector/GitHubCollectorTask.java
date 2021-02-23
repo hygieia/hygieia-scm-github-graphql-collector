@@ -233,7 +233,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         Set<GitHubRepo> repoSet = enabledRepos.stream().filter(e -> changedReposMap.containsKey(e.getRepoUrl().toLowerCase()) && !e.isPushed()).collect(Collectors.toSet());
         collector.setLatestProcessedEventId(changeRepoResponse.getLatestEventId());
         collector.setLatestProcessedEventTimestamp(changeRepoResponse.getLatestEventTimestamp());
-        if ((System.currentTimeMillis() - collector.getLastPrivateRepoCollectionTimestamp() > gitHubSettings.getPrivateRepoCollectionTime())) {
+        if (collectPrivateRepos(collector)) {
             Set<GitHubRepo> privateRepos = enabledRepos
                     .stream()
                     .filter(e -> ((!StringUtils.isEmpty(e.getPassword()) && !StringUtils.isEmpty(e.getUserId()))
@@ -255,6 +255,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         int issueCount = 0;
         count.set(0);
 
+        int offSetMinutes = collectPrivateRepos(collector) ? gitHubSettings.getPrivateRepoOffsetMinutes() : gitHubSettings.getOffsetMinutes();
 
         for (GitHubRepo repo : reposToCollect) {
             repoCount++;
@@ -289,7 +290,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                                 )
                         );
 
-                        gitHubClient.fireGraphQL(repo, firstRun, existingPRMap, existingIssueMap);
+                        gitHubClient.fireGraphQL(repo, firstRun, existingPRMap, existingIssueMap, offSetMinutes);
 
                         // Get all the commits
                         int commitCount1 = processCommits(repo);
@@ -365,6 +366,12 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         collector.setLastExecutedSeconds(elapsedSeconds);
     }
 
+
+    private boolean collectPrivateRepos (Collector collector) {
+        if(collector == null || !(collector instanceof GitHubCollector)) return true; // treat it as first run and collect everything.
+        GitHubCollector gitHubCollector = (GitHubCollector) collector;
+        return ((System.currentTimeMillis() - gitHubCollector.getLastPrivateRepoCollectionTimestamp() > gitHubSettings.getPrivateRepoCollectionTime()));
+    }
 
     private static String readableAge(long lastUpdated, long start) {
         if (lastUpdated <= 0) return "never before";

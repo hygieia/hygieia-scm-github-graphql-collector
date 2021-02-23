@@ -35,6 +35,10 @@ public class GitHubSettings {
 	private long commitPullSyncTime;
 	@Value("${github.offsetMinutes:10}") // 10 mins default
 	private int offsetMinutes;
+
+	@Value("${github.offsetMinutes:120}") // 120 mins default
+	private int privateRepoOffsetMinutes;
+
 	@Value("${github.fetchCount:50}")
 	private int fetchCount;
 
@@ -146,13 +150,15 @@ public class GitHubSettings {
 		this.commitPullSyncTime = commitPullSyncTime;
 	}
 
-	public int getOffsetMinutes() {
-		return offsetMinutes;
-	}
+	public int getOffsetMinutes() { return offsetMinutes; }
 
 	public void setOffsetMinutes(int offsetMinutes) {
 		this.offsetMinutes = offsetMinutes;
 	}
+
+	public int getPrivateRepoOffsetMinutes() { return privateRepoOffsetMinutes; }
+
+	public void setPrivateRepoOffsetMinutes(int privateRepoOffsetMinutes) { this.privateRepoOffsetMinutes = privateRepoOffsetMinutes; }
 
 	public int getFetchCount() {
 		return fetchCount;
@@ -193,7 +199,6 @@ public class GitHubSettings {
 	public String getBaseApiUrl() { return baseApiUrl; }
 
 	public void setBaseApiUrl(String baseApiUrl) { this.baseApiUrl = baseApiUrl; }
-
 
 	public String getSearchCriteria() {
 		return searchCriteria;

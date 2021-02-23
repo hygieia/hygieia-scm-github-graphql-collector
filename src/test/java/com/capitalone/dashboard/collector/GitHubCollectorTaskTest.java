@@ -11,8 +11,8 @@ import com.capitalone.dashboard.model.Component;
 import com.capitalone.dashboard.model.GitHubCollector;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.GitHubRateLimit;
-import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.model.GitRequest;
+import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.repository.CollectorRepository;
 import com.capitalone.dashboard.repository.CommitRepository;
 import com.capitalone.dashboard.repository.ComponentRepository;
@@ -40,9 +40,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyMap;
 import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -333,7 +334,7 @@ public class GitHubCollectorTaskTest {
 
         when(gitHubClient.isUnderRateLimit()).thenReturn(true);
         GitHubRepo repo = Mockito.mock(GitHubRepo.class);
-        doThrow(hc).when(gitHubClient).fireGraphQL(any(GitHubRepo.class), anyBoolean(), anyMap(), anyMap());
+        doThrow(hc).when(gitHubClient).fireGraphQL(any(GitHubRepo.class), anyBoolean(), anyMap(), anyMap(),anyInt());
         when(gitHubClient.getChangedRepos(anyLong(), anyLong())).thenReturn(makeChangeRepoResponse(getEnabledRepos()));
 
         long startTime = System.currentTimeMillis();
