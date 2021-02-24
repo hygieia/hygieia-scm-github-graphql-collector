@@ -169,7 +169,7 @@ public class DefaultGitHubClient implements GitHubClient {
         int count = 0;
         long waitTime = 0;
         while (!lastPage && !stop) {
-            LOG.info(String.format("Executing %s", queryUrlPage));
+            LOG.info(String.format("Executing events API call for %s", queryUrlPage));
             ResponseEntity<String> response = makeRestCallGet(queryUrlPage);
             if (response.getHeaders() != null && !CollectionUtils.isEmpty(response.getHeaders().get(X_POLL_INTERVAL))) {
                 waitTime = Integer.parseInt(response.getHeaders().get(X_POLL_INTERVAL).get(0));
@@ -260,7 +260,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
     @Override
     @SuppressWarnings("PMD.ExcessiveMethodLength")
-    public void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> existingIssueMap) throws MalformedURLException, HygieiaException {
+    public void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> existingIssueMap, int offSetMinutes) throws MalformedURLException, HygieiaException {
         // format URL
         String repoUrl = (String) repo.getOptions().get("url");
         GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
@@ -271,7 +271,7 @@ public class DefaultGitHubClient implements GitHubClient {
         issues = new LinkedList<>();
         ldapMap = new HashMap<>();
         authorTypeMap = new HashMap<>();
-        long historyTimeStamp = getTimeStampMills(getRunDate(repo, firstRun, false));
+        long historyTimeStamp = getTimeStampMills(getRunDate(repo, firstRun, false, offSetMinutes));
 
         String decryptedPassword = decryptString(repo.getPassword(), settings.getKey(), GitHubRepo.PASSWORD, repo);
         String personalAccessToken = (String) repo.getOptions().get("personalAccessToken");
@@ -283,7 +283,7 @@ public class DefaultGitHubClient implements GitHubClient {
         GitHubPaging dummyCommitPaging = new GitHubPaging();
         dummyCommitPaging.setLastPage(false);
 
-        JSONObject query = buildQuery(true, firstRun, false, gitHubParsed, repo, dummyCommitPaging, dummyPRPaging, dummyIssuePaging);
+        JSONObject query = buildQuery(true, firstRun, false, gitHubParsed, repo, dummyCommitPaging, dummyPRPaging, dummyIssuePaging, offSetMinutes);
         int loopCount = 1;
         while (!alldone) {
             LOG.debug(String.format("Executing loop %d for %s/%s", loopCount, gitHubParsed.getOrgName(), gitHubParsed.getRepoName()));
@@ -303,7 +303,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
                 alldone = Stream.of(pullPaging, commitPaging, issuePaging).allMatch(GitHubPaging::isLastPage);
 
-                query = buildQuery(false, firstRun, false, gitHubParsed, repo, commitPaging, pullPaging, issuePaging);
+                query = buildQuery(false, firstRun, false, gitHubParsed, repo, commitPaging, pullPaging, issuePaging, offSetMinutes);
 
                 loopCount++;
             }
@@ -337,7 +337,7 @@ public class DefaultGitHubClient implements GitHubClient {
         dummyCommitPaging = new GitHubPaging();
         dummyCommitPaging.setLastPage(false);
 
-        query = buildQuery(true, firstRun, true, gitHubParsed, repo, dummyCommitPaging, dummyPRPaging, dummyIssuePaging);
+        query = buildQuery(true, firstRun, true, gitHubParsed, repo, dummyCommitPaging, dummyPRPaging, dummyIssuePaging, offSetMinutes);
 
         loopCount = 1;
         int missingCommitCount = 0;
@@ -352,7 +352,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 alldone = commitPaging.isLastPage();
                 missingCommitCount += commitPaging.getCurrentCount();
 
-                query = buildQuery(false, firstRun, true, gitHubParsed, repo, commitPaging, dummyPRPaging, dummyIssuePaging);
+                query = buildQuery(false, firstRun, true, gitHubParsed, repo, commitPaging, dummyPRPaging, dummyIssuePaging, offSetMinutes);
 
                 loopCount++;
             }
@@ -377,7 +377,7 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONObject queryJSONBody = parseAsObject(response);
         String repoUrl = str(queryJSONBody, "html_url");
         if (!repoUrl.equals(repo.getRepoUrl())) {
-            LOG.info("original_url=" + repo.getRepoUrl() + ", redirected_url=" + repoUrl);
+            LOG.info("Repository has been redirected original_url=" + repo.getRepoUrl() + ", redirected_url=" + repoUrl);
             return new RedirectedStatus(true, repoUrl);
         }
         return new RedirectedStatus();
@@ -450,7 +450,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     @SuppressWarnings({"PMD.ExcessiveMethodLength", "PMD.NcssMethodCount"})
-    private JSONObject buildQuery(boolean firstTime, boolean firstRun, boolean missingCommits, GitHubParsed gitHubParsed, GitHubRepo repo, GitHubPaging commitPaging, GitHubPaging pullPaging, GitHubPaging issuePaging) {
+    private JSONObject buildQuery(boolean firstTime, boolean firstRun, boolean missingCommits, GitHubParsed gitHubParsed, GitHubRepo repo, GitHubPaging commitPaging, GitHubPaging pullPaging, GitHubPaging issuePaging, int offsetMinutes) {
         CollectionMode mode = getCollectionMode(firstTime, commitPaging, pullPaging, issuePaging);
         JSONObject jsonObj = new JSONObject();
         String query;
@@ -463,7 +463,7 @@ public class DefaultGitHubClient implements GitHubClient {
         switch (mode) {
             case FirstTimeAll:
                 query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_PULL_HEADER_FIRST + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_FIRST + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits, offsetMinutes));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
                 jsonObj.put("variables", variableJSON.toString());
@@ -472,7 +472,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
             case FirstTimeCommitOnly:
                 query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits, offsetMinutes));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
                 jsonObj.put("variables", variableJSON.toString());
@@ -480,7 +480,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
             case FirstTimeCommitAndIssue:
                 query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_FIRST + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits, offsetMinutes));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
                 jsonObj.put("variables", variableJSON.toString());
@@ -488,7 +488,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
             case FirstTimeCommitAndPull:
                 query = GithubGraphQLQuery.QUERY_BASE_ALL_FIRST + GithubGraphQLQuery.QUERY_PULL_HEADER_FIRST + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_COMMIT_HEADER_FIRST + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits,offsetMinutes));
                 variableJSON.put("branch", repo.getBranch());
                 jsonObj.put("query", query);
                 jsonObj.put("variables", variableJSON.toString());
@@ -496,7 +496,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
             case CommitOnly:
                 query = GithubGraphQLQuery.QUERY_BASE_COMMIT_ONLY_AFTER + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits, offsetMinutes));
                 variableJSON.put("afterCommit", commitPaging.getCursor());
                 variableJSON.put("branch", repo.getBranch());
 
@@ -526,7 +526,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 query = GithubGraphQLQuery.QUERY_BASE_COMMIT_AND_ISSUE_AFTER + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
                 variableJSON.put("afterIssue", issuePaging.getCursor());
                 variableJSON.put("afterCommit", commitPaging.getCursor());
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits,offsetMinutes));
                 variableJSON.put("branch", repo.getBranch());
 
                 jsonObj.put("query", query);
@@ -536,7 +536,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
             case CommitAndPull:
                 query = GithubGraphQLQuery.QUERY_BASE_COMMIT_AND_PULL_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits,offsetMinutes));
                 variableJSON.put("afterPull", pullPaging.getCursor());
                 variableJSON.put("afterCommit", commitPaging.getCursor());
                 variableJSON.put("branch", repo.getBranch());
@@ -557,7 +557,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
             case All:
                 query = GithubGraphQLQuery.QUERY_BASE_ALL_AFTER + GithubGraphQLQuery.QUERY_COMMIT_HEADER_AFTER + GithubGraphQLQuery.QUERY_COMMIT_MAIN + GithubGraphQLQuery.QUERY_PULL_HEADER_AFTER + GithubGraphQLQuery.QUERY_PULL_MAIN + GithubGraphQLQuery.QUERY_ISSUES_HEADER_AFTER + GithubGraphQLQuery.QUERY_ISSUE_MAIN + GithubGraphQLQuery.QUERY_END;
-                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits));
+                variableJSON.put("since", getRunDate(repo, firstRun, missingCommits,offsetMinutes));
                 variableJSON.put("afterPull", pullPaging.getCursor());
                 variableJSON.put("afterCommit", commitPaging.getCursor());
                 variableJSON.put("afterIssue", issuePaging.getCursor());
@@ -1192,6 +1192,8 @@ public class DefaultGitHubClient implements GitHubClient {
         return StringUtils.isEmpty(dateTime) ? 0 : new DateTime(dateTime).getMillis();
     }
 
+
+
     /**
      * Get run date based off of firstRun boolean
      *
@@ -1199,13 +1201,13 @@ public class DefaultGitHubClient implements GitHubClient {
      * @param firstRun
      * @return
      */
-    private String getRunDate(GitHubRepo repo, boolean firstRun, boolean missingCommits) {
+    private String getRunDate(GitHubRepo repo, boolean firstRun, boolean missingCommits, int offSetMinutes) {
         if (missingCommits) {
             long repoOffsetTime = getRepoOffsetTime(repo);
             if (repoOffsetTime > 0) {
-                return getDate(new DateTime(getRepoOffsetTime(repo)), 0, settings.getOffsetMinutes()).toString();
+                return getDate(new DateTime(getRepoOffsetTime(repo)), 0, offSetMinutes).toString();
             } else {
-                return getDate(new DateTime(repo.getLastUpdated()), 0, settings.getOffsetMinutes()).toString();
+                return getDate(new DateTime(repo.getLastUpdated()), 0, offSetMinutes).toString();
             }
         }
         if (firstRun) {
@@ -1216,7 +1218,7 @@ public class DefaultGitHubClient implements GitHubClient {
                 return getDate(new DateTime(), FIRST_RUN_HISTORY_DEFAULT, 0).toString();
             }
         } else {
-            return getDate(new DateTime(repo.getLastUpdated()), 0, settings.getOffsetMinutes()).toString();
+            return getDate(new DateTime(repo.getLastUpdated()), 0, offSetMinutes).toString();
         }
     }
 

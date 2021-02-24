@@ -24,7 +24,7 @@ public interface GitHubClient {
     List<GitRequest> getIssues();
     String getLDAPDN(GitHubRepo repo, String user);
 
-    void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> prCloseMap) throws MalformedURLException, HygieiaException;
+    void fireGraphQL(GitHubRepo repo, boolean firstRun, Map<Long, String> existingPRMap, Map<Long, String> prCloseMap, int offsetMinutes) throws MalformedURLException, HygieiaException;
 
     GitHubRateLimit getRateLimit(GitHubRepo repo) throws MalformedURLException, HygieiaException;
 
