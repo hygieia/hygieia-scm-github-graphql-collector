@@ -169,7 +169,7 @@ public class DefaultGitHubClient implements GitHubClient {
         int count = 0;
         long waitTime = 0;
         while (!lastPage && !stop) {
-            LOG.info(String.format("Executing %s", queryUrlPage));
+            LOG.info(String.format("Executing events API call for %s", queryUrlPage));
             ResponseEntity<String> response = makeRestCallGet(queryUrlPage);
             if (response.getHeaders() != null && !CollectionUtils.isEmpty(response.getHeaders().get(X_POLL_INTERVAL))) {
                 waitTime = Integer.parseInt(response.getHeaders().get(X_POLL_INTERVAL).get(0));
@@ -377,7 +377,7 @@ public class DefaultGitHubClient implements GitHubClient {
         JSONObject queryJSONBody = parseAsObject(response);
         String repoUrl = str(queryJSONBody, "html_url");
         if (!repoUrl.equals(repo.getRepoUrl())) {
-            LOG.info("original_url=" + repo.getRepoUrl() + ", redirected_ur=" + repoUrl);
+            LOG.info("Repository has been redirected original_url=" + repo.getRepoUrl() + ", redirected_url=" + repoUrl);
             return new RedirectedStatus(true, repoUrl);
         }
         return new RedirectedStatus();
