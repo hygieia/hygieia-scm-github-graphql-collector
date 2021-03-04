@@ -649,6 +649,9 @@ public class DefaultGitHubClient implements GitHubClient {
             pull.setCreatedAt(createdTimestamp);
             pull.setClosedAt(closedTimestamp);
             pull.setUpdatedAt(updatedTimestamp);
+            pull.setCountFilesChanged(asLong(node, "changedFiles"));
+            pull.setLineAdditions(asLong(node, "additions"));
+            pull.setLineDeletions(asLong(node, "deletions"));
             //Status
             pull.setState(str(node, "state").toLowerCase());
             JSONObject headrefJson = (JSONObject) node.get("headRef");
