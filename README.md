@@ -81,6 +81,12 @@ The sample `application.properties` lists parameter values to configure the GitH
 	# Database Password - default is blank
 	dbpassword=dbpassword
 	
+	#The port change.  Note that the default is 8080 and will conflict with API if not changed.  Change any collector by including
+	# the following.  Note a new port number is needed for each collector
+	server.port=9080  
+
+
+	
 	# Proxy URL
 	github.proxy=
 	
