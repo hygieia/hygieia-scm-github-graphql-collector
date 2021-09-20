@@ -1255,7 +1255,7 @@ public class DefaultGitHubClient implements GitHubClient {
         if (StringUtils.isNotEmpty(settings.getGraphqlUrl())) {
             graphqlUrl = settings.getGraphqlUrl();
         }
-        ResponseEntity<String> response = null;
+        ResponseEntity<String> response;
         int retryCount = 0;
         while(true) {
             try {
@@ -1339,6 +1339,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     private static JSONObject parseAsObject(ResponseEntity<String> response) {
+        if(response == null) return new JSONObject();
         try {
             return (JSONObject) new JSONParser().parse(response.getBody());
         } catch (ParseException pe) {
