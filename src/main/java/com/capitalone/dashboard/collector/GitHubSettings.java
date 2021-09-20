@@ -66,6 +66,10 @@ public class GitHubSettings {
     @Value("${github.collectChangedReposOnly:true}")
     private boolean collectChangedReposOnly;
 
+	@Value("${github.maxRetries:5}")
+    private int maxRetries;
+
+
 	public String getCron() {
 		return cron;
 	}
@@ -223,4 +227,12 @@ public class GitHubSettings {
     public void setCollectChangedReposOnly(boolean collectChangedReposOnly) {
         this.collectChangedReposOnly = collectChangedReposOnly;
     }
+
+	public int getMaxRetries() {
+		return maxRetries;
+	}
+
+	public void setMaxRetries(int maxRetries) {
+		this.maxRetries = maxRetries;
+	}
 }

@@ -1255,7 +1255,21 @@ public class DefaultGitHubClient implements GitHubClient {
         if (StringUtils.isNotEmpty(settings.getGraphqlUrl())) {
             graphqlUrl = settings.getGraphqlUrl();
         }
-        ResponseEntity<String> response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
+        ResponseEntity<String> response = null;
+        int retryCount = 0;
+        while(true) {
+            try {
+                response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
+                break;
+            } catch (Exception e) {
+                retryCount++;
+                if(retryCount > settings.getMaxRetries()) {
+                    LOG.error("Unable to get data from " + gitHubParsed.getUrl() + " after " + settings.getMaxRetries() + " tries!");
+                    throw new HygieiaException(e);
+                }
+            }
+        }
+
         JSONObject data = (JSONObject) parseAsObject(response).get("data");
         JSONArray errors = getArray(parseAsObject(response), "errors");
         HttpHeaders headers = response.getHeaders();
