@@ -69,6 +69,9 @@ public class GitHubSettings {
 	@Value("${github.maxRetries:5}")
     private int maxRetries;
 
+	@Value("${github.delay:250}")
+	private long delay;
+
 
 	public String getCron() {
 		return cron;
@@ -234,5 +237,13 @@ public class GitHubSettings {
 
 	public void setMaxRetries(int maxRetries) {
 		this.maxRetries = maxRetries;
+	}
+
+	public long getDelay() {
+		return delay;
+	}
+
+	public void setDelay(long delay) {
+		this.delay = delay;
 	}
 }

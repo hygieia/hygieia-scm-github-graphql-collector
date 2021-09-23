@@ -1266,12 +1266,12 @@ public class DefaultGitHubClient implements GitHubClient {
                 response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
                 break;
             } catch (HttpStatusCodeException hc) {
-                if (hc.getStatusCode() == HttpStatus.BAD_GATEWAY) {
-                    retryCount++;
-                    if (retryCount > settings.getMaxRetries()) {
-                        LOG.error("Unable to get data from " + gitHubParsed.getUrl() + " after " + settings.getMaxRetries() + " tries!");
-                        throw new HygieiaException(hc);
-                    }
+                if (hc.getStatusCode() != HttpStatus.BAD_GATEWAY) throw hc;
+                retryCount++;
+                sleep(settings.getDelay());
+                if (retryCount > settings.getMaxRetries()) {
+                    LOG.error("Unable to get data from " + gitHubParsed.getUrl() + " after " + settings.getMaxRetries() + " tries!");
+                    throw hc;
                 }
             }
         }
