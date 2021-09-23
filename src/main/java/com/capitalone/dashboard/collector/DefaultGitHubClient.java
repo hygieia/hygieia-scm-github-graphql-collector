@@ -35,8 +35,10 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
 import java.io.UnsupportedEncodingException;
@@ -71,6 +73,7 @@ public class DefaultGitHubClient implements GitHubClient {
     public static final String X_RATE_LIMIT_RESET = "X-RateLimit-Reset";
     public static final String RETRY_AFTER = "Retry-After";
     public static final String X_POLL_INTERVAL = "X-Poll-Interval";
+    public static final String BAD_GATEWAY = "502";
 
     private final GitHubSettings settings;
 
@@ -1255,7 +1258,24 @@ public class DefaultGitHubClient implements GitHubClient {
         if (StringUtils.isNotEmpty(settings.getGraphqlUrl())) {
             graphqlUrl = settings.getGraphqlUrl();
         }
-        ResponseEntity<String> response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
+        ResponseEntity<String> response;
+        int retryCount = 0;
+        // max retries if HTTP status code is 502 : Bad Gateway
+        while (true) {
+            try {
+                response = makeRestCallPost(graphqlUrl, repo.getUserId(), password, personalAccessToken, query);
+                break;
+            } catch (HttpStatusCodeException hc) {
+                if (hc.getStatusCode() != HttpStatus.BAD_GATEWAY) throw hc;
+                retryCount++;
+                sleep(settings.getDelay());
+                if (retryCount > settings.getMaxRetries()) {
+                    LOG.error("Unable to get data from " + gitHubParsed.getUrl() + " after " + settings.getMaxRetries() + " tries!");
+                    throw hc;
+                }
+            }
+        }
+
         JSONObject data = (JSONObject) parseAsObject(response).get("data");
         JSONArray errors = getArray(parseAsObject(response), "errors");
         HttpHeaders headers = response.getHeaders();
@@ -1325,6 +1345,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     private static JSONObject parseAsObject(ResponseEntity<String> response) {
+        if(response == null) return new JSONObject();
         try {
             return (JSONObject) new JSONParser().parse(response.getBody());
         } catch (ParseException pe) {

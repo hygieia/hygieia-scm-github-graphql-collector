@@ -10,7 +10,7 @@
   </description>
   <url>https://github.com/Hygieia/${repository.name}</url>
   <packaging>jar</packaging>
-  <version>3.3.6-SNAPSHOT</version>
+  <version>3.3.7-SNAPSHOT</version>
 
 
   <parent>
