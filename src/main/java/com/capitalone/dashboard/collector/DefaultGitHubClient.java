@@ -3,6 +3,7 @@ package com.capitalone.dashboard.collector;
 import com.capitalone.dashboard.client.RestClient;
 import com.capitalone.dashboard.client.RestUserInfo;
 import com.capitalone.dashboard.misc.HygieiaException;
+import com.capitalone.dashboard.model.AuthType;
 import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.CollectionMode;
 import com.capitalone.dashboard.model.CollectorItemMetadata;
@@ -17,7 +18,9 @@ import com.capitalone.dashboard.model.GitHubRateLimit;
 import com.capitalone.dashboard.model.GitRequest;
 import com.capitalone.dashboard.model.MergeEvent;
 import com.capitalone.dashboard.model.Review;
+import com.capitalone.dashboard.model.UserEntitlements;
 import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
+import com.capitalone.dashboard.repository.UserEntitlementsRepository;
 import com.capitalone.dashboard.util.CommitPullMatcher;
 import com.capitalone.dashboard.util.Encryption;
 import com.capitalone.dashboard.util.EncryptionException;
@@ -74,10 +77,11 @@ public class DefaultGitHubClient implements GitHubClient {
     public static final String RETRY_AFTER = "Retry-After";
     public static final String X_POLL_INTERVAL = "X-Poll-Interval";
     public static final String BAD_GATEWAY = "502";
+    private static final String ENTITLEMENT_TYPE = "distinguishedName";
 
     private final GitHubSettings settings;
-
     private final RestClient restClient;
+    private final UserEntitlementsRepository userEntitlementsRepository;
 
     private List<Commit> commits;
     private List<GitRequest> pullRequests;
@@ -112,10 +116,11 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     @Autowired
-    public DefaultGitHubClient(GitHubSettings settings,
-                               RestClient restClient) {
+    public DefaultGitHubClient(GitHubSettings settings, RestClient restClient,
+                               UserEntitlementsRepository userEntitlementsRepository) {
         this.settings = settings;
         this.restClient = restClient;
+        this.userEntitlementsRepository = userEntitlementsRepository;
 
         if (!CollectionUtils.isEmpty(settings.getNotBuiltCommits())) {
             settings.getNotBuiltCommits().stream().map(regExStr -> Pattern.compile(regExStr, Pattern.CASE_INSENSITIVE)).forEach(commitExclusionPatterns::add);
@@ -758,15 +763,17 @@ public class DefaultGitHubClient implements GitHubClient {
             String message = str(node, "message");
             String authorName = str(authorJSON, "name");
             String authorLogin = authorUserJSON == null ? "unknown" : str(authorUserJSON, "login");
-            String authorLDAPDN = "unknown".equalsIgnoreCase(authorLogin) ? null : getLDAPDN(repo, authorLogin);
+            String scmAuthorName = authorUserJSON == null ? null : str(authorUserJSON, "name");
+            String authorLDAPDN = getLDAPDN(repo, StringUtils.isEmpty(scmAuthorName) ? authorLogin : scmAuthorName);
             Commit commit = new Commit();
             commit.setTimestamp(System.currentTimeMillis());
             commit.setScmUrl(repo.getRepoUrl());
             commit.setScmBranch(repo.getBranch());
             commit.setScmRevisionNumber(sha);
             commit.setScmAuthor(authorName);
+            commit.setScmAuthorName(StringUtils.lowerCase(scmAuthorName));
             commit.setScmAuthorLogin(authorLogin);
-            commit.setScmAuthorType(getAuthorType(repo, authorLogin));
+            commit.setScmAuthorType(settings.isOptimizeUserCallsToGithub() ? "User" : getAuthorType(repo, authorLogin));
             commit.setScmAuthorLDAPDN(authorLDAPDN);
             commit.setScmCommitLog(message);
             commit.setScmCommitTimestamp(getTimeStampMills(str(authorJSON, "date")));
@@ -920,8 +927,11 @@ public class DefaultGitHubClient implements GitHubClient {
             JSONObject authorUserJSON = (JSONObject) author.get("user");
             newCommit.setScmAuthor(str(author, "name"));
             newCommit.setScmAuthorLogin(authorUserJSON == null ? "unknown" : str(authorUserJSON, "login"));
+            String scmAuthorName = authorUserJSON == null ? null : str(authorUserJSON, "name");
+            newCommit.setScmAuthorName(StringUtils.lowerCase(scmAuthorName));
             String authorType = getAuthorType(repo, newCommit.getScmAuthorLogin());
-            String authorLDAPDN = getLDAPDN(repo, newCommit.getScmAuthorLogin());
+            String authorLDAPDN = getLDAPDN(repo,
+                    (StringUtils.isEmpty(newCommit.getScmAuthorName()) ? newCommit.getScmAuthorLogin() : newCommit.getScmAuthorName()));
             if (StringUtils.isNotEmpty(authorType)) {
                 newCommit.setScmAuthorType(authorType);
             }
@@ -1139,6 +1149,16 @@ public class DefaultGitHubClient implements GitHubClient {
 
     private void getUser(GitHubRepo repo, String user) {
         String repoUrl = (String) repo.getOptions().get("url");
+        if(StringUtils.isEmpty(user)) return;
+
+        if(settings.isOptimizeUserCallsToGithub()) {
+            UserEntitlements entitlements = userEntitlementsRepository.findTopByAuthTypeAndEntitlementTypeAndUsername(AuthType.LDAP,
+                    ENTITLEMENT_TYPE, StringUtils.lowerCase(user));
+            String ldapDN = (entitlements == null) ?  "" : entitlements.getEntitlements();
+            ldapMap.put(user, ldapDN);
+            authorTypeMap.put(user, "User");
+            return;
+        }
         try {
             GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
             String apiUrl = gitHubParsed.getBaseApiUrl();
@@ -1164,6 +1184,11 @@ public class DefaultGitHubClient implements GitHubClient {
     @Override
     public String getLDAPDN(GitHubRepo repo, String user) {
         if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
+
+        if(settings.isOptimizeUserCallsToGithub()) {
+            return ldapMap.get(user);
+        }
+
         //This is weird. Github does replace the _ in commit author with - in the user api!!!
         String formattedUser = user.replace("_", "-");
         if (ldapMap.containsKey(formattedUser)) {

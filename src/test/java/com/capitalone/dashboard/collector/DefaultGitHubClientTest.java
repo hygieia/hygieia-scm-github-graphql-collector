@@ -7,6 +7,7 @@ import com.capitalone.dashboard.misc.HygieiaException;
 import com.capitalone.dashboard.model.ChangeRepoResponse;
 import com.capitalone.dashboard.model.GitHubParsed;
 import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
+import com.capitalone.dashboard.repository.UserEntitlementsRepository;
 import com.google.common.io.Resources;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
@@ -37,17 +38,21 @@ public class DefaultGitHubClientTest {
 
     @Mock private RestOperationsSupplier restOperationsSupplier;
     @Mock private RestOperations rest;
+    @Mock private UserEntitlementsRepository userEntitlementsRepository;
 
     private RestClient restClient;
     private GitHubSettings settings;
     private DefaultGitHubClient defaultGitHubClient;
+
     private static final String URL_USER = "http://mygithub.com/api/v3/users/";
 
     @Before
     public void init() {
         when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new GitHubSettings();
-        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier));
+        settings.setOptimizeUserCallsToGithub(false);
+        defaultGitHubClient = new DefaultGitHubClient(settings, new RestClient(restOperationsSupplier),
+                userEntitlementsRepository);
         defaultGitHubClient.setLdapMap(new HashMap<>());
 
     }

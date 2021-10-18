@@ -66,6 +66,9 @@ public class GitHubSettings {
     @Value("${github.collectChangedReposOnly:true}")
     private boolean collectChangedReposOnly;
 
+	@Value("${github.optimizeUserCallsToGithub:true}")
+    private boolean optimizeUserCallsToGithub;
+
 	@Value("${github.maxRetries:5}")
     private int maxRetries;
 
@@ -230,6 +233,14 @@ public class GitHubSettings {
     public void setCollectChangedReposOnly(boolean collectChangedReposOnly) {
         this.collectChangedReposOnly = collectChangedReposOnly;
     }
+
+	public boolean isOptimizeUserCallsToGithub() {
+		return optimizeUserCallsToGithub;
+	}
+
+	public void setOptimizeUserCallsToGithub(boolean optimizeUserCallsToGithub) {
+		this.optimizeUserCallsToGithub = optimizeUserCallsToGithub;
+	}
 
 	public int getMaxRetries() {
 		return maxRetries;
