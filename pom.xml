@@ -10,7 +10,7 @@
   </description>
   <url>https://github.com/Hygieia/${repository.name}</url>
   <packaging>jar</packaging>
-  <version>3.3.7-SNAPSHOT</version>
+  <version>3.3.8-SNAPSHOT</version>
 
 
   <parent>
@@ -49,9 +49,9 @@
 
   <properties>
     <!-- Dependencies -->
-    <com.capitalone.dashboard.core.version>3.14.13</com.capitalone.dashboard.core.version>
+    <com.capitalone.dashboard.core.version>3.15.20</com.capitalone.dashboard.core.version>
     <spring-security.version>4.2.18.RELEASE</spring-security.version>
-    <tomcat.version>8.5.57</tomcat.version>
+    <tomcat.version>8.5.70</tomcat.version>
     <commons-beanutils.version>1.9.4</commons-beanutils.version>
     <commons-codec.version>1.14</commons-codec.version>
     <commons-collections4.version>4.1</commons-collections4.version>
@@ -60,7 +60,7 @@
     <fongo.version>2.2.0-RC2</fongo.version>
     <guava.version>29.0-jre</guava.version>
     <hibernate-validator.version>5.4.2.Final</hibernate-validator.version>
-    <jackson.version>2.10.3</jackson.version>
+    <jackson.version>2.10.5</jackson.version>
     <jasypt.version>1.18</jasypt.version>
     <logback.version>1.2.3</logback.version>
     <mongodb.version>3.6.4</mongodb.version>
