@@ -764,7 +764,7 @@ public class DefaultGitHubClient implements GitHubClient {
             String authorName = str(authorJSON, "name");
             String authorLogin = authorUserJSON == null ? "unknown" : str(authorUserJSON, "login");
             String scmAuthorName = authorUserJSON == null ? null : str(authorUserJSON, "name");
-            String authorLDAPDN = getLDAPDN(repo, StringUtils.isEmpty(scmAuthorName) ? authorLogin : scmAuthorName);
+            String authorLDAPDN = getLDAPDN(repo, authorLogin);
             Commit commit = new Commit();
             commit.setTimestamp(System.currentTimeMillis());
             commit.setScmUrl(repo.getRepoUrl());
@@ -773,7 +773,7 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setScmAuthor(authorName);
             commit.setScmAuthorName(StringUtils.lowerCase(scmAuthorName));
             commit.setScmAuthorLogin(authorLogin);
-            commit.setScmAuthorType(settings.isOptimizeUserCallsToGithub() ? "User" : getAuthorType(repo, authorLogin));
+            commit.setScmAuthorType(getAuthorType(repo, authorLogin));
             commit.setScmAuthorLDAPDN(authorLDAPDN);
             commit.setScmCommitLog(message);
             commit.setScmCommitTimestamp(getTimeStampMills(str(authorJSON, "date")));
@@ -930,8 +930,7 @@ public class DefaultGitHubClient implements GitHubClient {
             String scmAuthorName = authorUserJSON == null ? null : str(authorUserJSON, "name");
             newCommit.setScmAuthorName(StringUtils.lowerCase(scmAuthorName));
             String authorType = getAuthorType(repo, newCommit.getScmAuthorLogin());
-            String authorLDAPDN = getLDAPDN(repo,
-                    (StringUtils.isEmpty(newCommit.getScmAuthorName()) ? newCommit.getScmAuthorLogin() : newCommit.getScmAuthorName()));
+            String authorLDAPDN = getLDAPDN(repo, newCommit.getScmAuthorLogin());
             if (StringUtils.isNotEmpty(authorType)) {
                 newCommit.setScmAuthorType(authorType);
             }
@@ -1150,15 +1149,6 @@ public class DefaultGitHubClient implements GitHubClient {
     private void getUser(GitHubRepo repo, String user) {
         String repoUrl = (String) repo.getOptions().get("url");
         if(StringUtils.isEmpty(user)) return;
-
-        if(settings.isOptimizeUserCallsToGithub()) {
-            UserEntitlements entitlements = userEntitlementsRepository.findTopByAuthTypeAndEntitlementTypeAndUsername(AuthType.LDAP,
-                    ENTITLEMENT_TYPE, StringUtils.lowerCase(user));
-            String ldapDN = (entitlements == null) ?  "" : entitlements.getEntitlements();
-            ldapMap.put(user, ldapDN);
-            authorTypeMap.put(user, "User");
-            return;
-        }
         try {
             GitHubParsed gitHubParsed = new GitHubParsed(repoUrl);
             String apiUrl = gitHubParsed.getBaseApiUrl();
@@ -1186,7 +1176,9 @@ public class DefaultGitHubClient implements GitHubClient {
         if (StringUtils.isEmpty(user) || "unknown".equalsIgnoreCase(user)) return null;
 
         if(settings.isOptimizeUserCallsToGithub()) {
-            return ldapMap.get(user);
+            UserEntitlements entitlements = userEntitlementsRepository.findTopByAuthTypeAndEntitlementTypeAndUsername(AuthType.LDAP,
+                    ENTITLEMENT_TYPE, StringUtils.lowerCase(user));
+            return (entitlements == null) ?  "" : entitlements.getEntitlements();
         }
 
         //This is weird. Github does replace the _ in commit author with - in the user api!!!
