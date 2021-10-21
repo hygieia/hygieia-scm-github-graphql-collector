@@ -771,7 +771,7 @@ public class DefaultGitHubClient implements GitHubClient {
             commit.setScmBranch(repo.getBranch());
             commit.setScmRevisionNumber(sha);
             commit.setScmAuthor(authorName);
-            commit.setScmAuthorName(StringUtils.lowerCase(scmAuthorName));
+            commit.setScmAuthorName(scmAuthorName);
             commit.setScmAuthorLogin(authorLogin);
             commit.setScmAuthorType(getAuthorType(repo, authorLogin));
             commit.setScmAuthorLDAPDN(authorLDAPDN);
@@ -1177,7 +1177,7 @@ public class DefaultGitHubClient implements GitHubClient {
 
         if(settings.isOptimizeUserCallsToGithub()) {
             UserEntitlements entitlements = userEntitlementsRepository.findTopByAuthTypeAndEntitlementTypeAndUsername(AuthType.LDAP,
-                    ENTITLEMENT_TYPE, StringUtils.lowerCase(user));
+                    ENTITLEMENT_TYPE, user);
             return (entitlements == null) ?  "" : entitlements.getEntitlements();
         }
 
