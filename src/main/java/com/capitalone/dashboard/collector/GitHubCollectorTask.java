@@ -328,7 +328,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                         }
                         if (hc.getStatusCode() == HttpStatus.NOT_FOUND) {
                             LOG.error(String.format("Received 404 HttpStatusCodeException from GitHub. Status code=%s ResponseBody=%s", hc.getStatusCode(), hc.getResponseBodyAsString()));
-                            LOG.info(String.format("Deleting Github repo from collector-items : ", repoUrl));
+                            LOG.info(String.format("Deleting Github repo from collector-items=%s : ", repoUrl));
                             gitHubRepoRepository.delete(repo.getId());
                         }
                         repo.getErrors().add(error);
