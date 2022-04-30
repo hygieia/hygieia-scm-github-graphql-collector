@@ -326,6 +326,11 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                             long endSleeping = System.currentTimeMillis();
                             LOG.info(String.format("Waking up after [%d] sec, at: %s", (endSleeping - startSleeping) / 1000L, new DateTime(endSleeping).toString("yyyy-MM-dd hh:mm:ss.SSa")));
                         }
+                        if (hc.getStatusCode() == HttpStatus.NOT_FOUND) {
+                            LOG.error(String.format("Received 404 HttpStatusCodeException from GitHub. Status code=%s ResponseBody=%s", hc.getStatusCode(), hc.getResponseBodyAsString()));
+                            LOG.info(String.format("Deleting Github repo from collector-items=%s ", repoUrl));
+                            gitHubRepoRepository.delete(repo.getId());
+                        }
                         repo.getErrors().add(error);
                     } catch (RestClientException | MalformedURLException ex) {
                         LOG.error(String.format("Error fetching commits for:%s", repo.getRepoUrl()), ex);
