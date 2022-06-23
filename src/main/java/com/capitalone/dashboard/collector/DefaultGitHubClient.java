@@ -1101,7 +1101,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     private CommitType getCommitType(int parentSize, String commitMessage) {
-        if (parentSize > 1) return CommitType.Merge;
+        if (parentSize >= 1) return CommitType.Merge;
         if (settings.getNotBuiltCommits() == null) return CommitType.New;
         if (!CollectionUtils.isEmpty(commitExclusionPatterns)) {
             for (Pattern pattern : commitExclusionPatterns) {
