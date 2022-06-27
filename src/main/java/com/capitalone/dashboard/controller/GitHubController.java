@@ -6,6 +6,7 @@ import com.capitalone.dashboard.model.Collector;
 import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.repository.BaseCollectorRepository;
 import com.capitalone.dashboard.repository.GitHubRepoRepository;
+import com.capitalone.dashboard.request.SyncPRRequest;
 import com.capitalone.dashboard.service.GitHubService;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.logging.Log;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,6 +25,7 @@ import java.util.Objects;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.springframework.web.bind.annotation.RequestMethod.GET;
+import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 @RestController
 @Validated
@@ -68,5 +71,10 @@ public class GitHubController {
     @RequestMapping(value = "/cleanup", method = GET, produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<String> cleanup() throws HygieiaException {
         return gitHubService.cleanup();
+    }
+
+    @RequestMapping(value = "/syncPullRequest", consumes = APPLICATION_JSON_VALUE,method = POST, produces = APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> syncPullRequest(@Valid @RequestBody SyncPRRequest request) {
+        return gitHubService.syncPullRequest(request.getTitle(), request.getRepoUrl(), request.getBranch(), request.getLimit());
     }
 }

@@ -476,11 +476,14 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                     pullNumbers.add("...");
                 }
             }
-            if (existing == null) {
-                entry.setCollectorItemId(repo.getId());
-                count++;
-            } else {
+            if (existing != null) {
+                LOG.info(String.format("Existing PR - collectorItemId=%s, RepoURL=%s, RepoBranch=%s\nEntryURL=%s, EntryBranch=%s", repo.getId().toString(), repo.getRepoUrl(), repo.getBranch(), entry.getScmUrl(), entry.getScmBranch()));
                 entry.setId(existing.getId());
+            }else {
+                count++;
+                LOG.info(String.format("Non Existing PR - collectorItemId=%s, RepoURL=%s, RepoBranch=%s\nEntryURL=%s, EntryBranch=%s", repo.getId().toString(), repo.getRepoUrl(), repo.getBranch(), entry.getScmUrl(), entry.getScmBranch()));
+            }
+            if (repo.getRepoUrl().equalsIgnoreCase(entry.getScmUrl()) && repo.getBranch().equalsIgnoreCase(entry.getScmBranch())){
                 entry.setCollectorItemId(repo.getId());
             }
             gitRequestRepository.save(entry);

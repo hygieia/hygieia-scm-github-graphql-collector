@@ -292,6 +292,7 @@ public class DefaultGitHubClient implements GitHubClient {
         dummyCommitPaging.setLastPage(false);
 
         JSONObject query = buildQuery(true, firstRun, false, gitHubParsed, repo, dummyCommitPaging, dummyPRPaging, dummyIssuePaging, offSetMinutes);
+        LOG.info(String.format("Repo=%s, FireGrapQL BuildQuery String=%s", repo.getRepoUrl(), query.toString()));
         int loopCount = 1;
         while (!alldone) {
             LOG.debug(String.format("Executing loop %d for %s/%s", loopCount, gitHubParsed.getOrgName(), gitHubParsed.getRepoName()));
