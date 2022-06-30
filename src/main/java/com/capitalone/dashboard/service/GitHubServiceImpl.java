@@ -58,7 +58,7 @@ public class GitHubServiceImpl implements GitHubService {
                 .body(GITHUB_COLLECTOR_NAME + " cleanup - " + count + " obsolete GitHub repo's deleted. ");
     }
 
-    public ResponseEntity<String> syncPullRequest(String title, String repoUrl, String branch, int limit){
+    public ResponseEntity<String> syncPullRequest(String title, String repoUrl, String branch){
         ObjectId githubCollectorId = collectorRepository.findByName(GITHUB_COLLECTOR_NAME).getId();
 
         // get the collector item id from the collectorItems should result in only one
