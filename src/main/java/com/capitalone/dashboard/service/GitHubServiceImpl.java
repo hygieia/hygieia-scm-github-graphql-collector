@@ -73,7 +73,7 @@ public class GitHubServiceImpl implements GitHubService {
         if(dashboard.isEmpty()){
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find dashboard for title: %s", title));
         }
-        ObjectId componentId = dashboard.get(0).getApplication().getComponents().get(0).getId();
+        ObjectId componentId = dashboard.get(0).getWidgets().get(0).getComponentId();
 
         com.capitalone.dashboard.model.Component component = componentRepository.findOne(componentId);
         if(Objects.isNull(component)){
@@ -85,7 +85,7 @@ public class GitHubServiceImpl implements GitHubService {
         // get all git requests with collectorItemID
         List<GitRequest> allGitRequests = gitRequestRepository.findByCollectorItemIdAndRequestType(collectorItemID, "pull");
         if (allGitRequests.isEmpty()){
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(String.format("Unable to find any gitRequests with the collectorItemId: %s", collectorItem));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(String.format("Unable to find any gitRequests with the collectorItemId: %s", collectorItemID.toString()));
         }
 
         // filter list of gitRequests, if scmUrl not in SCMs list add that gitRequest to the list so we can fix later
@@ -94,14 +94,16 @@ public class GitHubServiceImpl implements GitHubService {
         // iterate through the git requests with the wrong collectorItemId and correct them
         for (GitRequest gr: gitRequestsToFix) {
             CollectorItem collItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, gr.getScmUrl(), gr.getScmBranch());
-            if (Objects.isNull(collItem)){
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(String.format("Unable to find collector item for repo: %s", repoUrl));
+            if (Objects.nonNull(collItem)){
+                gr.setCollectorItemId(collItem.getId());
+                gitRequestRepository.save(gr);
+                LOG.info(String.format("GitRequest with wrong collectorItemId: %s \tcorrectCollectorItemId: %s", gr.getScmUrl(), collItem.getId().toString()));
             }
-            gr.setCollectorItemId(collItem.getId());
-            gitRequestRepository.save(gr);
-            LOG.info(String.format("GitRequest with wrong collectorItemId: %s \tcorrectCollectorItemId: %s", gr.getScmUrl(), collItem.getId().toString()));
+            else {
+                LOG.info(String.format("Unable to update gitRequest: Unable to find collector item for repo: %s", gr.getScmUrl()));
+            }
         }
-        String responseString = String.format("Successfully corrected the following gitRequests with URLs: %s", gitRequestsToFix.stream().
+        String responseString = String.format("SyncPullRequest: Successfully corrected the following gitRequests with URLs: %s", gitRequestsToFix.stream().
                 map(gr -> gr.getScmUrl().toString()).collect(Collectors.joining(", ")));
         return ResponseEntity.status(HttpStatus.OK).body(responseString);
 

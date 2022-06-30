@@ -4,7 +4,6 @@ public class SyncPRRequest extends BaseRequest {
     private String title;
     private String repoUrl;
     private String branch;
-    private int limit;
 
 
     public String getRepoUrl() {
@@ -21,14 +20,6 @@ public class SyncPRRequest extends BaseRequest {
 
     public void setBranch(String branch) {
         this.branch = branch;
-    }
-
-    public int getLimit() {
-        return limit;
-    }
-
-    public void setLimit(int limit) {
-        this.limit = limit;
     }
 
     public String getTitle() {
