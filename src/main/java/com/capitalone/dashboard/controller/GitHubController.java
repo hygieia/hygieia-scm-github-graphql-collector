@@ -75,6 +75,6 @@ public class GitHubController {
 
     @RequestMapping(value = "/syncPullRequest", consumes = APPLICATION_JSON_VALUE,method = POST, produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<String> syncPullRequest(@Valid @RequestBody SyncPRRequest request) {
-        return gitHubService.syncPullRequest(request.getTitle(), request.getRepoUrl(), request.getBranch(), request.getLimit());
+        return gitHubService.syncPullRequest(request.getTitle(), request.getRepoUrl(), request.getBranch());
     }
 }
