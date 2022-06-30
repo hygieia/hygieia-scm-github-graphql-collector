@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -92,19 +93,28 @@ public class GitHubServiceImpl implements GitHubService {
         List<GitRequest> gitRequestsToFix = allGitRequests.stream().filter(GR -> !SCMs.contains(GR.getScmUrl().toLowerCase())).collect(Collectors.toList());
 
         // iterate through the git requests with the wrong collectorItemId and correct them
+        List<GitRequest> fixedGitRequests = new ArrayList<>();
+        int failedUpdateCount = 0;
         for (GitRequest gr: gitRequestsToFix) {
             CollectorItem collItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, gr.getScmUrl(), gr.getScmBranch());
             if (Objects.nonNull(collItem)){
                 gr.setCollectorItemId(collItem.getId());
                 gitRequestRepository.save(gr);
                 LOG.info(String.format("GitRequest with wrong collectorItemId: %s \tcorrectCollectorItemId: %s", gr.getScmUrl(), collItem.getId().toString()));
+                fixedGitRequests.add(gr);
             }
             else {
                 LOG.info(String.format("Unable to update gitRequest: Unable to find collector item for repo: %s", gr.getScmUrl()));
-                gitRequestsToFix.remove(gr); // removing so not in response later
+                failedUpdateCount++;
             }
         }
-        String responseString = String.format("SyncPullRequest: Successfully corrected the following gitRequests with URLs: %s", gitRequestsToFix.stream().
+        String responseString = "SyncPullRequest: ";
+
+        if (failedUpdateCount > 0){
+            responseString = responseString + "[FAILED TO UPDATE " + String.valueOf(failedUpdateCount) + "GIT REQUEST] ";
+        }
+
+        responseString = responseString + String.format("Successfully corrected the following gitRequests with URLs: %s", fixedGitRequests.stream().
                 map(gr -> gr.getScmUrl().toString()).collect(Collectors.joining(", ")));
         return ResponseEntity.status(HttpStatus.OK).body(responseString);
 
