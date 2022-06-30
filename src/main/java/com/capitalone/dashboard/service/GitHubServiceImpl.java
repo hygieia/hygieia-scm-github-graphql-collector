@@ -101,6 +101,7 @@ public class GitHubServiceImpl implements GitHubService {
             }
             else {
                 LOG.info(String.format("Unable to update gitRequest: Unable to find collector item for repo: %s", gr.getScmUrl()));
+                gitRequestsToFix.remove(gr); // removing so not in response later
             }
         }
         String responseString = String.format("SyncPullRequest: Successfully corrected the following gitRequests with URLs: %s", gitRequestsToFix.stream().
