@@ -111,7 +111,7 @@ public class GitHubServiceImpl implements GitHubService {
         String responseString = "SyncPullRequest: ";
 
         if (failedUpdateCount > 0){
-            responseString = responseString + "[FAILED TO UPDATE " + String.valueOf(failedUpdateCount) + "GIT REQUEST] ";
+            responseString = responseString + "[FAILED TO UPDATE " + String.valueOf(failedUpdateCount) + " GIT REQUEST] ";
         }
 
         responseString = responseString + String.format("Successfully corrected the following gitRequests with URLs: %s", fixedGitRequests.stream().
