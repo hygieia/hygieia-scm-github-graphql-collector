@@ -15,8 +15,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.counting;
+import static java.util.stream.Collectors.groupingBy;
 
 @Component
 public class GitHubServiceImpl implements GitHubService {
@@ -28,13 +32,14 @@ public class GitHubServiceImpl implements GitHubService {
     private final ComponentRepository componentRepository;
     private final DashboardRepository dashboardRepository;
     private final CollectorItemRepository collectorItemRepository;
+    private final CommitRepository commitRepository;
     private static final String GITHUB_COLLECTOR_NAME = "GitHub";
 
     @Autowired
     public GitHubServiceImpl(BaseCollectorRepository<GitHubCollector> collectorRepository,
                              GitHubRepoRepository gitHubRepoRepository, GitRequestRepository gitRequestRepository,
                              ComponentRepository componentRepository, DashboardRepository dashboardRepository,
-                             CollectorItemRepository collectorItemRepository,
+                             CollectorItemRepository collectorItemRepository, CommitRepository commitRepository,
                              GitHubCollectorTask gitHubCollectorTask) {
         this.collectorRepository = collectorRepository;
         this.gitHubRepoRepository = gitHubRepoRepository;
@@ -42,6 +47,7 @@ public class GitHubServiceImpl implements GitHubService {
         this.componentRepository = componentRepository;
         this.dashboardRepository = dashboardRepository;
         this.collectorItemRepository = collectorItemRepository;
+        this.commitRepository = commitRepository;
     }
 
     public ResponseEntity<String> cleanup() {
@@ -83,10 +89,12 @@ public class GitHubServiceImpl implements GitHubService {
         //to lower case so we can ignore case when comparing for gitRequestsToFix
         List<String> SCMs = component.getCollectorItems().get(CollectorType.SCM).stream().map(scm -> scm.getOptions().get("url").toString().toLowerCase()).collect(Collectors.toList());
 
+        String responseString = "SyncPullRequest: "; // will be updated during the data cleaning
+
         // get all git requests with collectorItemID
         List<GitRequest> allGitRequests = gitRequestRepository.findByCollectorItemIdAndRequestType(collectorItemID, "pull");
         if (allGitRequests.isEmpty()){
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(String.format("Unable to find any gitRequests with the collectorItemId: %s", collectorItemID.toString()));
+            responseString += "[No GitRequests found] ";
         }
 
         // filter list of gitRequests, if scmUrl not in SCMs list add that gitRequest to the list so we can fix later
@@ -100,7 +108,7 @@ public class GitHubServiceImpl implements GitHubService {
             if (Objects.nonNull(collItem)){
                 gr.setCollectorItemId(collItem.getId());
                 gitRequestRepository.save(gr);
-                LOG.info(String.format("GitRequest with wrong collectorItemId: %s \tcorrectCollectorItemId: %s", gr.getScmUrl(), collItem.getId().toString()));
+                LOG.info(String.format("GitRequest with wrong collectorItemId: %s \tcorrect CollectorItemId: %s", gr.getScmUrl(), collItem.getId().toString()));
                 fixedGitRequests.add(gr);
             }
             else {
@@ -108,14 +116,39 @@ public class GitHubServiceImpl implements GitHubService {
                 failedUpdateCount++;
             }
         }
-        String responseString = "SyncPullRequest: ";
 
-        if (failedUpdateCount > 0){
-            responseString = responseString + "[FAILED TO UPDATE " + String.valueOf(failedUpdateCount) + " GIT REQUEST] ";
+        // getting all the commits by collectorItemId (timestamp ignored by using min and max values)
+        List<Commit> allCommits = commitRepository.findByCollectorItemIdAndScmCommitTimestampIsBetween(collectorItemID, 0, System.currentTimeMillis());
+        if(allCommits.isEmpty()){
+            responseString += "[No commits found] ";
         }
 
-        responseString = responseString + String.format("Successfully corrected the following gitRequests with URLs: %s", fixedGitRequests.stream().
-                map(gr -> gr.getScmUrl().toString()).collect(Collectors.joining(", ")));
+        // filter for commits that do not belong and iterate through the list to fix them
+        List<Commit> commitsToFix = allCommits.stream().filter(com -> !SCMs.contains(com.getScmUrl().toLowerCase())).collect(Collectors.toList());
+        List<Commit> fixedCommits = new ArrayList<>();
+        for (Commit commit: commitsToFix) {
+            CollectorItem collItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, commit.getScmUrl(), commit.getScmBranch());
+            if(Objects.nonNull(collItem)) {
+                commit.setCollectorItemId(collItem.getId());
+                commitRepository.save(commit);
+                LOG.info(String.format("Commit with wrong collectorItemId: %s \tcorrect CollectorItemId: %s", commit.getScmUrl(), collItem.getId().toString()));
+                fixedCommits.add(commit);
+            }
+            else{
+                LOG.info(String.format("Unable to update commit: Unable to find collector item for repo: %s", commit.getScmUrl()));
+                failedUpdateCount++;
+            }
+        }
+
+        if (failedUpdateCount > 0){
+            responseString += "[FAILED TO UPDATE: " + String.valueOf(failedUpdateCount) + " Document(s) please check logs for more details] ";
+        }
+
+        // converting the list of documents changed to a map with count of scm occurrences
+        Map<String, Long> fixedGitMap = fixedGitRequests.stream().collect(groupingBy(GR -> GR.getScmUrl(), counting()));
+        Map<String, Long> fixedCommitMap = fixedCommits.stream().collect(groupingBy(com -> com.getScmUrl(), counting()));
+        responseString += "Successfully corrected the following gitRequests: " + fixedGitMap + " ";
+        responseString += "Successfully corrected the following commits: " +  fixedCommitMap;
         return ResponseEntity.status(HttpStatus.OK).body(responseString);
 
     }
