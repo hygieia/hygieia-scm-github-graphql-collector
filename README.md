@@ -1,3 +1,4 @@
+
 ## Hygieia Collector for Github leveraging graphql
 
 [![Build Status](https://travis-ci.com/Hygieia/hygieia-scm-github-graphql-collector.svg?branch=master)](https://travis-ci.com/Hygieia/hygieia-scm-github-graphql-collector)
