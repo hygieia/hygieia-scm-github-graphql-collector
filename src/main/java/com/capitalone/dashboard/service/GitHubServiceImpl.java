@@ -101,7 +101,7 @@ public class GitHubServiceImpl implements GitHubService {
         List<GitRequest> gitRequestsToFix = allGitRequests.stream().filter(GR -> !SCMs.contains(GR.getScmUrl().toLowerCase())).collect(Collectors.toList());
 
         // iterate through the git requests with the wrong collectorItemId and correct them
-        List<GitRequest> fixedGitRequests = new ArrayList<>();
+        List<GitRequest> fixedGitRequests = new ArrayList<>();  // to track documents that were updated
         int failedUpdateCount = 0;
         for (GitRequest gr: gitRequestsToFix) {
             CollectorItem collItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, gr.getScmUrl(), gr.getScmBranch());

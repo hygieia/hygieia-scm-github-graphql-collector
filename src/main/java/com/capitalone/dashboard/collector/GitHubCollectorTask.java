@@ -435,7 +435,11 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         if (existingCount == 0) {
             List<Commit> newCommits = gitHubClient.getCommits();
             for (Commit c : newCommits) {
-                c.setCollectorItemId(repo.getId());
+
+                if (repo.getRepoUrl().equalsIgnoreCase(c.getScmUrl()) && repo.getBranch().equalsIgnoreCase(c.getScmBranch())){
+                    c.setCollectorItemId(repo.getId());
+                }
+
                 if (commitRepository.save(c) != null) {
                     count++;
                 }
@@ -447,7 +451,11 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             for (Commit commit : nonDupCommits) {
                 LOG.debug(String.format("%d:::%s", commit.getTimestamp(), commit.getScmCommitLog()));
                 if (isNewCommit(repo, commit)) {
-                    commit.setCollectorItemId(repo.getId());
+
+                    if (repo.getRepoUrl().equalsIgnoreCase(commit.getScmUrl()) && repo.getBranch().equalsIgnoreCase(commit.getScmBranch())){
+                        commit.setCollectorItemId(repo.getId());
+                    }
+
                     commitRepository.save(commit);
                     count++;
                 }
