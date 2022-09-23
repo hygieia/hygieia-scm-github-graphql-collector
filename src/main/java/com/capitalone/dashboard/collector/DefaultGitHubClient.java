@@ -1344,16 +1344,21 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     private ResponseEntity<String> makeRestCallPost(String url, String userId, String password, String personalAccessToken, JSONObject query) {
+        ResponseEntity<String> response;
         // Basic Auth only.
         if (!Objects.equals("", userId) && !Objects.equals("", password)) {
             RestUserInfo userInfo = new RestUserInfo(userId, password);
-            return restClient.makeRestCallPost(url, userInfo, query);
+            response = restClient.makeRestCallPost(url, userInfo, query);
         } else if (personalAccessToken != null && !Objects.equals("", personalAccessToken)) {
-            return restClient.makeRestCallPost(url, "token", personalAccessToken, query);
+            response = restClient.makeRestCallPost(url, "token", personalAccessToken, query);
+            if (Objects.nonNull(response) && response.getStatusCode() != HttpStatus.OK) {
+                response = restClient.makeRestCallPost(url, "token", settings.getPersonalAccessToken(), query);
+            }
         } else {
             // This handles the case when settings.getPersonalAccessToken() is empty
-            return restClient.makeRestCallPost(url, "token", settings.getPersonalAccessToken(), query);
+            response = restClient.makeRestCallPost(url, "token", settings.getPersonalAccessToken(), query);
         }
+        return response;
     }
 
     private ResponseEntity<String> makeRestCallGet(String url) throws RestClientException {
