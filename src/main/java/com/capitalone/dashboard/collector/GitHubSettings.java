@@ -58,7 +58,7 @@ public class GitHubSettings {
 
 	private String proxyUser;
 
-	private String proxyPassword;
+	private char[] proxyPassword;
 
 	@Value("${github.privateRepoCollectionTime:600000}")
 	private long privateRepoCollectionTime; //private repos will be collected in these many milliseconds.
@@ -198,9 +198,9 @@ public class GitHubSettings {
 
 	public void setProxyUser(String proxyUser) { this.proxyUser = proxyUser; }
 
-	public String getProxyPassword() { return proxyPassword; }
+	public String getProxyPassword() { return new String(proxyPassword); }
 
-	public void setProxyPassword(String proxyPassword) { this.proxyPassword = proxyPassword; }
+	public void setProxyPassword(String proxyPassword) { this.proxyPassword = proxyPassword.toCharArray(); }
 
 	public String getGraphqlUrl() { return graphqlUrl; }
 

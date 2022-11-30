@@ -1,9 +1,10 @@
 package com.capitalone.dashboard.request;
 
 public class SyncPRRequest extends BaseRequest {
-    private String title;
+    private String servName;
+    private String appName;
     private String repoUrl;
-    private String branch;
+    private String altIdentifier;
 
 
     public String getRepoUrl() {
@@ -14,19 +15,19 @@ public class SyncPRRequest extends BaseRequest {
         this.repoUrl = repoUrl;
     }
 
-    public String getBranch() {
-        return branch;
+    public String getAltIdentifier() {
+        return altIdentifier;
     }
 
-    public void setBranch(String branch) {
-        this.branch = branch;
+    public void setAltIdentifier(String altIdentifier) {
+        this.altIdentifier = altIdentifier;
     }
 
-    public String getTitle() {
-        return title;
-    }
+    public void setAppName(String appName) { this.appName = appName;}
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
+    public String getAppName() { return appName; }
+
+    public void setServName(String servName) { this.servName = servName; }
+
+    public String getServName() { return servName; }
 }

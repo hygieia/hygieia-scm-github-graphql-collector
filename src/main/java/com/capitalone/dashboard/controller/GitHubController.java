@@ -9,8 +9,9 @@ import com.capitalone.dashboard.repository.GitHubRepoRepository;
 import com.capitalone.dashboard.request.SyncPRRequest;
 import com.capitalone.dashboard.service.GitHubService;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +31,7 @@ import static org.springframework.web.bind.annotation.RequestMethod.POST;
 @RestController
 @Validated
 public class GitHubController {
-    private static final Log LOG = LogFactory.getLog(GitHubController.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GitHubController.class);
 
     private final BaseCollectorRepository<Collector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
@@ -51,7 +52,7 @@ public class GitHubController {
 
     @RequestMapping(value = "/refresh", method = GET, produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<String> refresh(@Valid String url) throws HygieiaException {
-        if (Objects.isNull(url)) return ResponseEntity.status(HttpStatus.OK).body("URL is null");
+        if (StringUtils.isEmpty(url) || StringUtils.isBlank(url)) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("ERROR :: URL cannot be null");
         Collector collector = collectorRepository.findByName(GITHUB_COLLECTOR_NAME);
         if (Objects.isNull(collector))
             return ResponseEntity.status(HttpStatus.OK).body(GITHUB_COLLECTOR_NAME + " collector is not found");
@@ -75,6 +76,6 @@ public class GitHubController {
 
     @RequestMapping(value = "/syncPullRequest", consumes = APPLICATION_JSON_VALUE,method = POST, produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<String> syncPullRequest(@Valid @RequestBody SyncPRRequest request) {
-        return gitHubService.syncPullRequest(request.getTitle(), request.getRepoUrl(), request.getBranch());
+        return gitHubService.syncPullRequest(request.getServName(), request.getAppName(), request.getAltIdentifier());
     }
 }

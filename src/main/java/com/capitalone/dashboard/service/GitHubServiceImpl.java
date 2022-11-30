@@ -1,12 +1,13 @@
 package com.capitalone.dashboard.service;
 
-import com.capitalone.dashboard.collector.GitHubCollectorTask;
+
 import com.capitalone.dashboard.model.*;
 import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.repository.*;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -24,7 +25,7 @@ import static java.util.stream.Collectors.groupingBy;
 
 @Component
 public class GitHubServiceImpl implements GitHubService {
-    private static final Log LOG = LogFactory.getLog(GitHubServiceImpl.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GitHubServiceImpl.class);
 
     private final BaseCollectorRepository<GitHubCollector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
@@ -39,8 +40,7 @@ public class GitHubServiceImpl implements GitHubService {
     public GitHubServiceImpl(BaseCollectorRepository<GitHubCollector> collectorRepository,
                              GitHubRepoRepository gitHubRepoRepository, GitRequestRepository gitRequestRepository,
                              ComponentRepository componentRepository, DashboardRepository dashboardRepository,
-                             CollectorItemRepository collectorItemRepository, CommitRepository commitRepository,
-                             GitHubCollectorTask gitHubCollectorTask) {
+                             CollectorItemRepository collectorItemRepository, CommitRepository commitRepository){
         this.collectorRepository = collectorRepository;
         this.gitHubRepoRepository = gitHubRepoRepository;
         this.gitRequestRepository = gitRequestRepository;
@@ -58,98 +58,72 @@ public class GitHubServiceImpl implements GitHubService {
         if (CollectionUtils.isEmpty(repos))
             return ResponseEntity.status(HttpStatus.OK).body("No more Obsolete GitHub repo found");
         int count = repos.size();
-        gitHubRepoRepository.delete(repos);
+        gitHubRepoRepository.deleteAll(repos);
         LOG.info(GITHUB_COLLECTOR_NAME + " cleanup - " + count + " obsolete GitHub repo's deleted. ");
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(GITHUB_COLLECTOR_NAME + " cleanup - " + count + " obsolete GitHub repo's deleted. ");
     }
 
-    public ResponseEntity<String> syncPullRequest(String title, String repoUrl, String branch){
-        ObjectId githubCollectorId = collectorRepository.findByName(GITHUB_COLLECTOR_NAME).getId();
+    public ResponseEntity<String> syncPullRequest(String servName, String appName, String altIdentifier ){
 
-        // get the collector item id from the collectorItems should result in only one
-        CollectorItem collectorItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, repoUrl, branch);
-        if(Objects.isNull(collectorItem)){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find collector item for repo: %s", repoUrl));
+        if (StringUtils.isEmpty(servName) || StringUtils.isEmpty(appName)){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("servName and appName are required fields");
         }
-        ObjectId collectorItemID = collectorItem.getId();
 
-        // go to that collectorItemID in components and get all the SCM urls
-        List<Dashboard> dashboard = dashboardRepository.findByTitle(title);
-        if(dashboard.isEmpty()){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find dashboard for title: %s", title));
+        // use servName and appName to get dashboard -> component -> scm's
+        Dashboard dashboard = dashboardRepository.findByConfigurationItemBusServNameIgnoreCaseAndConfigurationItemBusAppNameIgnoreCase(servName, appName);
+        if(Objects.isNull(dashboard)){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find dashboard for {servName: %s, appName: %s}", servName, appName));
         }
-        ObjectId componentId = dashboard.get(0).getWidgets().get(0).getComponentId();
 
-        com.capitalone.dashboard.model.Component component = componentRepository.findOne(componentId);
+        if(dashboard.getWidgets().isEmpty()){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find component for {servName: %s, appName: %s}", servName, appName));
+        }
+        ObjectId componentId = dashboard.getWidgets().get(0).getComponentId();
+
+        com.capitalone.dashboard.model.Component component = componentRepository.findById(componentId).orElse(null);
         if(Objects.isNull(component)){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(String.format("Unable to find component with componentId: %s", componentId));
         }
-        //to lower case so we can ignore case when comparing for gitRequestsToFix
-        List<String> SCMs = component.getCollectorItems().get(CollectorType.SCM).stream().map(scm -> scm.getOptions().get("url").toString().toLowerCase()).collect(Collectors.toList());
 
-        String responseString = "SyncPullRequest: "; // will be updated during the data cleaning
-
-        // get all git requests with collectorItemID
-        List<GitRequest> allGitRequests = gitRequestRepository.findByCollectorItemIdAndRequestType(collectorItemID, "pull");
-        if (allGitRequests.isEmpty()){
-            responseString += "[No GitRequests found] ";
+        if(Objects.isNull(component.getCollectorItems().get(CollectorType.SCM))){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find any repos attached to {servName: %s, appName: %s}",servName, appName));
         }
 
-        // filter list of gitRequests, if scmUrl not in SCMs list add that gitRequest to the list so we can fix later
-        List<GitRequest> gitRequestsToFix = allGitRequests.stream().filter(GR -> !SCMs.contains(GR.getScmUrl().toLowerCase())).collect(Collectors.toList());
+        // use scm data to collect PRs and Commits, then check if they are valid for the assigned collectorItemId
+        if (StringUtils.isBlank(altIdentifier)){
+            int gitCount = 0;
+            int commitCount = 0;
 
-        // iterate through the git requests with the wrong collectorItemId and correct them
-        List<GitRequest> fixedGitRequests = new ArrayList<>();  // to track documents that were updated
-        int failedUpdateCount = 0;
-        for (GitRequest gr: gitRequestsToFix) {
-            CollectorItem collItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, gr.getScmUrl(), gr.getScmBranch());
-            if (Objects.nonNull(collItem)){
-                gr.setCollectorItemId(collItem.getId());
-                gitRequestRepository.save(gr);
-                LOG.info(String.format("GitRequest with wrong collectorItemId: %s \tcorrect CollectorItemId: %s", gr.getScmUrl(), collItem.getId().toString()));
-                fixedGitRequests.add(gr);
+            for (CollectorItem scm:component.getCollectorItems().get(CollectorType.SCM)){
+                // Collect documents -> compare url of documents to scm url -> delete if not a match
+                List<GitRequest> allGitRequests = gitRequestRepository.findByCollectorItemIdAndRequestType(scm.getId(), "pull");
+                List<GitRequest> gitRequestsToFix = allGitRequests.stream().filter(GR -> !scm.getOptions().get("url").toString().equalsIgnoreCase(GR.getScmUrl())).collect(Collectors.toList());
+                gitRequestsToFix.forEach(GR -> gitRequestRepository.deleteById(GR.getId()));
+                gitCount+= gitRequestsToFix.size();
+
+                List<Commit> allCommits = commitRepository.findByCollectorItemIdAndScmCommitTimestampIsBetween(scm.getId(), 0, System.currentTimeMillis());
+                List<Commit> commitsToFix = allCommits.stream().filter(com -> !scm.getOptions().get("url").equals(com.getScmUrl())).collect(Collectors.toList());
+                commitsToFix.forEach(com -> commitRepository.deleteById(com.getId()));
+                commitCount += commitsToFix.size();
             }
-            else {
-                LOG.info(String.format("Unable to update gitRequest: Unable to find collector item for repo: %s", gr.getScmUrl()));
-                failedUpdateCount++;
+
+            return ResponseEntity.status(HttpStatus.OK).body(String.format("syncPullRequest :: Component Level :: Removed %d pull requests and %d commits", gitCount, commitCount));
+        }else {
+            CollectorItem repo = component.getCollectorItems().get(CollectorType.SCM).stream().filter(scm -> altIdentifier.equalsIgnoreCase(scm.getAltIdentifier())).findFirst().orElse(null);
+
+            if (Objects.isNull(repo)){
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(String.format("Unable to find collector item for repo: %s", altIdentifier));
             }
+            List<GitRequest> allGitRequests = gitRequestRepository.findByCollectorItemIdAndRequestType(repo.getId(), "pull");
+            List<GitRequest> gitRequestsToFix = allGitRequests.stream().filter(GR -> !repo.getOptions().get("url").toString().equalsIgnoreCase(GR.getScmUrl())).collect(Collectors.toList());
+            gitRequestsToFix.forEach(GR -> gitRequestRepository.deleteById(GR.getId()));
+
+            List<Commit> allCommits = commitRepository.findByCollectorItemIdAndScmCommitTimestampIsBetween(repo.getId(), 0, System.currentTimeMillis());
+            List<Commit> commitsToFix = allCommits.stream().filter(com -> !repo.getOptions().get("url").toString().equalsIgnoreCase(com.getScmUrl())).collect(Collectors.toList());
+            commitsToFix.forEach(com -> commitRepository.deleteById(com.getId()));
+            return ResponseEntity.status(HttpStatus.OK).body(String.format("syncPullRequest :: Removed %d pull requests and %d commits", gitRequestsToFix.size(), commitsToFix.size()));
         }
-
-        // getting all the commits by collectorItemId (timestamp ignored by using min and max values)
-        List<Commit> allCommits = commitRepository.findByCollectorItemIdAndScmCommitTimestampIsBetween(collectorItemID, 0, System.currentTimeMillis());
-        if(allCommits.isEmpty()){
-            responseString += "[No commits found] ";
-        }
-
-        // filter for commits that do not belong and iterate through the list to fix them
-        List<Commit> commitsToFix = allCommits.stream().filter(com -> !SCMs.contains(com.getScmUrl().toLowerCase())).collect(Collectors.toList());
-        List<Commit> fixedCommits = new ArrayList<>();
-        for (Commit commit: commitsToFix) {
-            CollectorItem collItem = collectorItemRepository.findRepoByUrlAndBranch(githubCollectorId, commit.getScmUrl(), commit.getScmBranch());
-            if(Objects.nonNull(collItem)) {
-                commit.setCollectorItemId(collItem.getId());
-                commitRepository.save(commit);
-                LOG.info(String.format("Commit with wrong collectorItemId: %s \tcorrect CollectorItemId: %s", commit.getScmUrl(), collItem.getId().toString()));
-                fixedCommits.add(commit);
-            }
-            else{
-                LOG.info(String.format("Unable to update commit: Unable to find collector item for repo: %s", commit.getScmUrl()));
-                failedUpdateCount++;
-            }
-        }
-
-        if (failedUpdateCount > 0){
-            responseString += "[FAILED TO UPDATE: " + String.valueOf(failedUpdateCount) + " Document(s) please check logs for more details] ";
-        }
-
-        // converting the list of documents changed to a map with count of scm occurrences
-        Map<String, Long> fixedGitMap = fixedGitRequests.stream().collect(groupingBy(GR -> GR.getScmUrl(), counting()));
-        Map<String, Long> fixedCommitMap = fixedCommits.stream().collect(groupingBy(com -> com.getScmUrl(), counting()));
-        responseString += "Successfully corrected the following gitRequests: " + fixedGitMap + " ";
-        responseString += "Successfully corrected the following commits: " +  fixedCommitMap;
-        return ResponseEntity.status(HttpStatus.OK).body(responseString);
-
     }
 }
