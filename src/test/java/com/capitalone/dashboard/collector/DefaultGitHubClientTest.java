@@ -10,13 +10,13 @@ import com.capitalone.dashboard.model.webhook.github.GitHubRepo;
 import com.capitalone.dashboard.repository.UserEntitlementsRepository;
 import com.google.common.io.Resources;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,9 +32,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class DefaultGitHubClientTest {
-    private static final Log LOG = LogFactory.getLog(DefaultGitHubClientTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultGitHubClientTest.class);
 
     @Mock private RestOperationsSupplier restOperationsSupplier;
     @Mock private RestOperations rest;
@@ -46,7 +46,7 @@ public class DefaultGitHubClientTest {
 
     private static final String URL_USER = "http://mygithub.com/api/v3/users/";
 
-    @Before
+    @BeforeEach
     public void init() {
         when(restOperationsSupplier.get()).thenReturn(rest);
         settings = new GitHubSettings();

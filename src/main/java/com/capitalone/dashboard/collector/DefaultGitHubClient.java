@@ -29,8 +29,8 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.joda.time.DateTime;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -49,6 +49,7 @@ import java.net.MalformedURLException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -68,7 +69,7 @@ import java.util.stream.Stream;
 @Component
 @SuppressWarnings("PMD.ExcessiveClassLength")
 public class DefaultGitHubClient implements GitHubClient {
-    private static final Log LOG = LogFactory.getLog(DefaultGitHubClient.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultGitHubClient.class);
 
     // GitHub response headers:
     public static final String X_RATE_LIMIT_LIMIT = "X-RateLimit-Limit";
@@ -286,7 +287,9 @@ public class DefaultGitHubClient implements GitHubClient {
         String decryptPersonalAccessToken = decryptString(personalAccessToken, settings.getKey(), GitHubRepo.PERSONAL_ACCESS_TOKEN, repo);
         boolean alldone = false;
 
-        GitHubPaging dummyPRPaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingPRMap, "pull", firstRun);
+        GitHubPaging dummyPRPaging = isThereNewPRorIssue(gitHubParsed, repo, 
+        		decryptedPassword, 
+        		decryptPersonalAccessToken, existingPRMap, "pull", firstRun);
         GitHubPaging dummyIssuePaging = isThereNewPRorIssue(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, existingIssueMap, "issue", firstRun);
         GitHubPaging dummyCommitPaging = new GitHubPaging();
         dummyCommitPaging.setLastPage(false);
@@ -296,12 +299,12 @@ public class DefaultGitHubClient implements GitHubClient {
         int loopCount = 1;
         while (!alldone) {
             LOG.debug(String.format("Executing loop %d for %s/%s", loopCount, gitHubParsed.getOrgName(), gitHubParsed.getRepoName()));
-            JSONObject data = getDataFromRestCallPost(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, query);
+             JSONObject data = getDataFromRestCallPost(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, query);
 
             if (data != null) {
                 JSONObject repository = (JSONObject) data.get("repository");
 
-                GitHubPaging pullPaging = processPullRequest((JSONObject) repository.get("pullRequests"), repo, existingPRMap);
+                GitHubPaging pullPaging = processPullRequest((JSONObject) repository.get("pullRequests"), repo, existingPRMap, query);
                 LOG.debug(String.format("--- Processed %d of total %d pull requests", pullPaging.getCurrentCount(), pullPaging.getTotalCount()));
 
                 GitHubPaging issuePaging = processIssues((JSONObject) repository.get("issues"), gitHubParsed, existingIssueMap, historyTimeStamp);
@@ -589,6 +592,36 @@ public class DefaultGitHubClient implements GitHubClient {
         return jsonObj;
     }
 
+    private JSONObject buildQueryForCommentsAndReviews(JSONObject oldQuery, GitHubPaging commentPaging, GitHubPaging reviewsPaging, String prNumber) throws ParseException, HygieiaException{
+        JSONObject jsonObject = new JSONObject();
+        JSONParser parser = new JSONParser();
+        String query;
+
+        // to prevent NPE's
+        if (Objects.isNull(jsonObject) || Objects.isNull(parser) || Objects.isNull(commentPaging) || Objects.isNull(reviewsPaging) || Objects.isNull(prNumber)){
+            throw new HygieiaException("BuildQueryForCommentsAndReviews :: possible NPE when building query",-14);
+        }
+        JSONObject newVars = (JSONObject)  parser.parse(oldQuery.get("variables").toString());
+
+        if(!commentPaging.isLastPage() && !reviewsPaging.isLastPage()){query=GithubGraphQLQuery.QUERY_BASE_COMMENT_AND_REVIEW_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_BY_ID + GithubGraphQLQuery.QUERY_COMMENTS + GithubGraphQLQuery.QUERY_REVIEWS;}
+        else if(!commentPaging.isLastPage()){
+            query=GithubGraphQLQuery.QUERY_BASE_COMMENT_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_BY_ID + GithubGraphQLQuery.QUERY_COMMENTS;
+            newVars.put("afterComment", commentPaging.getCursor());
+        }
+        else if(!reviewsPaging.isLastPage()){
+            query=GithubGraphQLQuery.QUERY_BASE_REVIEW_AFTER + GithubGraphQLQuery.QUERY_PULL_HEADER_BY_ID + GithubGraphQLQuery.QUERY_REVIEWS;
+            newVars.put("afterReview", reviewsPaging.getCursor());
+        }
+        else return new JSONObject();       // in case we somehow reach here
+
+        newVars.put("prNumber", Integer.parseInt(prNumber));
+
+        query+=GithubGraphQLQuery.QUERY_PR_END;
+        jsonObject.put("variables", newVars.toString());
+        jsonObject.put("query", query);
+        return jsonObject;
+    }
+
     @SuppressWarnings({"PMD.NPathComplexity", "PMD.ExcessiveMethodLength", "PMD.AvoidBranchingStatementAsLastInLoop", "PMD.EmptyIfStmt"})
     private static CollectionMode getCollectionMode(boolean firstTime, GitHubPaging commitPaging, GitHubPaging pullPaging, GitHubPaging issuePaging) {
         if (firstTime) {
@@ -618,7 +651,7 @@ public class DefaultGitHubClient implements GitHubClient {
     }
 
     @SuppressWarnings({"PMD.NPathComplexity"})
-    private GitHubPaging processPullRequest(JSONObject pullObject, GitHubRepo repo, Map<Long, String> prMap) throws MalformedURLException, HygieiaException {
+    private GitHubPaging processPullRequest(JSONObject pullObject, GitHubRepo repo, Map<Long, String> prMap, JSONObject query) throws MalformedURLException, HygieiaException {
         GitHubPaging paging = new GitHubPaging();
         paging.setLastPage(true);
         if (pullObject == null) return paging;
@@ -677,10 +710,70 @@ public class DefaultGitHubClient implements GitHubClient {
                 pull.setNumberOfChanges(commitsObject != null ? asInt(commitsObject, "totalCount") : 0);
                 List<Commit> prCommits = getPRCommits(repo, commitsObject, pull);
                 pull.setCommits(prCommits);
-                List<Comment> comments = getComments(repo, (JSONObject) node.get("comments"));
-                pull.setComments(comments);
-                List<Review> reviews = getReviews(repo, (JSONObject) node.get("reviews"));
-                pull.setReviews(reviews);
+
+                JSONObject commentData = (JSONObject) node.get("comments");
+                JSONObject reviewData = (JSONObject) node.get("reviews");
+                JSONObject commentPageInfo = (JSONObject) commentData.get("pageInfo");
+                JSONObject reviewPageInfo = (JSONObject) reviewData.get("pageInfo");
+
+                GitHubPaging commentPaging = new GitHubPaging();
+                GitHubPaging reviewPaging = new GitHubPaging();
+
+                commentPaging.setCursor(str(commentPageInfo, "endCursor"));
+                reviewPaging.setCursor(str(reviewPageInfo, "endCursor"));
+                commentPaging.setLastPage(!(Boolean) commentPageInfo.get("hasNextPage"));
+                reviewPaging.setLastPage(!(Boolean) reviewPageInfo.get("hasNextPage"));
+                commentPaging.setTotalCount(asInt(commentData,"totalCount"));
+                reviewPaging.setTotalCount(asInt(reviewData,"totalCount"));
+
+                Boolean firstRun = true;
+                List<Comment> commentsContainer = new ArrayList<>();
+                List<Review> reviewsContainer = new ArrayList<>();
+
+                do{
+                    if(!firstRun){
+                        LOG.info("Making GraphQL call to collect remaining comments or reviews for repo=" + repo.getRepoUrl());
+                        String decryptedPassword = decryptString(repo.getPassword(), settings.getKey(), GitHubRepo.PASSWORD, repo);
+                        String decryptPersonalAccessToken = decryptString((String) repo.getOptions().get("personalAccessToken"), settings.getKey(), GitHubRepo.PERSONAL_ACCESS_TOKEN, repo);
+                        JSONObject data = null;
+
+                        try {
+                            query = buildQueryForCommentsAndReviews(query, commentPaging, reviewPaging, pull.getNumber());
+                            data = getDataFromRestCallPost(gitHubParsed, repo, decryptedPassword, decryptPersonalAccessToken, query);
+                        }catch(Exception e){
+                            LOG.error(e.getMessage());
+                            break;    // break from attempting another graphQL call and continue with PR processing
+                        }
+
+                        // update githubPaging, comments, reviews
+                        JSONObject repository = (JSONObject) data.get("repository");
+                        JSONObject pullRequest = (JSONObject) repository.get("pullRequest");
+                        commentData = (JSONObject) pullRequest.get("comments");
+                        reviewData = (JSONObject) pullRequest.get("reviews");
+
+                        if(Objects.nonNull(commentData)){
+                            commentPageInfo = (JSONObject) commentData.get("pageInfo");
+                            commentPaging.setCursor(str(commentPageInfo, "endCursor"));
+                            commentPaging.setLastPage(!(Boolean) commentPageInfo.get("hasNextPage"));
+                        }
+                        else if(Objects.nonNull(reviewData)){
+                            reviewPageInfo = (JSONObject) reviewData.get("pageInfo");
+                            reviewPaging.setCursor(str(reviewPageInfo, "endCursor"));
+                            reviewPaging.setLastPage(!(Boolean) reviewPageInfo.get("hasNextPage"));
+                        }
+
+                    }
+                    firstRun = false;
+                    List<Comment> comments = getComments(repo, commentData);
+                    List<Review> reviews = getReviews(repo, reviewData);
+                    commentsContainer.addAll(comments);
+                    reviewsContainer.addAll(reviews);
+
+                } while(!commentPaging.isLastPage() || !reviewPaging.isLastPage());
+
+                pull.setComments(commentsContainer);
+                pull.setReviews(reviewsContainer);
+
                 MergeEvent mergeEvent = getMergeEvent(repo, pull, (JSONObject) node.get("timeline"));
                 if (mergeEvent != null) {
                     pull.setScmMergeEventRevisionNumber(mergeEvent.getMergeSha());
@@ -1346,13 +1439,13 @@ public class DefaultGitHubClient implements GitHubClient {
     private ResponseEntity<String> makeRestCallPost(String url, String userId, String password, String personalAccessToken, JSONObject query) {
         ResponseEntity<String> response;
         // Basic Auth only.
-        if (!Objects.equals("", userId) && !Objects.equals("", password)) {
+        if(!Objects.equals("", userId) && !Objects.equals("", password)){
             RestUserInfo userInfo = new RestUserInfo(userId, password);
             response = restClient.makeRestCallPost(url, userInfo, query);
         } else if (personalAccessToken != null && !Objects.equals("", personalAccessToken)) {
-            response = restClient.makeRestCallPost(url, "token", personalAccessToken, query);
+            response = restClient.makeRestCallPost(url, "token", settings.getPersonalAccessToken(), query);
             if (Objects.nonNull(response) && response.getStatusCode() != HttpStatus.OK) {
-                response = restClient.makeRestCallPost(url, "token", settings.getPersonalAccessToken(), query);
+                response = restClient.makeRestCallPost(url, "token", personalAccessToken, query);
             }
         } else {
             // This handles the case when settings.getPersonalAccessToken() is empty

@@ -22,13 +22,13 @@ public class GitHubRepoTests {
 	@Before
     public void init() {
 		githubRepo1 = new GitHubRepo();
-		githubRepo1.setRepoUrl("https://github.com/capitalone/Hygiea.git");
+		githubRepo1.setRepoUrl("https://github.com/capitalone/hygiea.git");
 		githubRepo1.setBranch("master");
 		githubRepo2 = new GitHubRepo();
-		githubRepo2.setRepoUrl("https://github.com/capitalone/Hygiea.git");
+		githubRepo2.setRepoUrl("https://github.com/capitalone/hygiea.git");
         githubRepo2.setBranch("master");
         githubRepo3=new GitHubRepo();
-        githubRepo3.setRepoUrl("https://github.com/capitalone/Hygieas.git");
+        githubRepo3.setRepoUrl("https://github.com/capitalone/hygieas.git");
         githubRepo3.setBranch("master");
         }
 	

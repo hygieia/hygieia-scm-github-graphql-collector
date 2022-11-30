@@ -26,8 +26,8 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.bson.types.ObjectId;
 import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
  */
 @Component
 public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
-    private static final Log LOG = LogFactory.getLog(GitHubCollectorTask.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GitHubCollectorTask.class);
 
     private final BaseCollectorRepository<GitHubCollector> collectorRepository;
     private final GitHubRepoRepository gitHubRepoRepository;
@@ -181,7 +181,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             repo.setEnabled(uniqueIDs.contains(repo.getId()));
             repoList.add(repo);
         });
-        gitHubRepoRepository.save(repoList);
+        gitHubRepoRepository.saveAll(repoList);
         collector.setLastCleanUpTimestamp(System.currentTimeMillis());
     }
 
@@ -329,7 +329,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
                         if (hc.getStatusCode() == HttpStatus.NOT_FOUND) {
                             LOG.error(String.format("Received 404 HttpStatusCodeException from GitHub. Status code=%s ResponseBody=%s", hc.getStatusCode(), hc.getResponseBodyAsString()));
                             LOG.info(String.format("Deleting Github repo from collector-items=%s ", repoUrl));
-                            gitHubRepoRepository.delete(repo.getId());
+                            gitHubRepoRepository.deleteById(repo.getId());
                         }
                         repo.getErrors().add(error);
                     } catch (RestClientException | MalformedURLException ex) {
@@ -389,7 +389,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         String proxyUrl = gitHubSettings.getProxyUrl();
         String proxyPort = gitHubSettings.getProxyPort();
         String proxyUser = gitHubSettings.getProxyUser();
-        String proxyPassword = gitHubSettings.getProxyPassword();
+        //String proxyPassword = gitHubSettings.getProxyPassword();
 
         if (!StringUtils.isEmpty(proxyUrl) && !StringUtils.isEmpty(proxyPort)) {
             System.setProperty("http.proxyHost", proxyUrl);
@@ -397,11 +397,11 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
             System.setProperty("http.proxyPort", proxyPort);
             System.setProperty("https.proxyPort", proxyPort);
 
-            if (!StringUtils.isEmpty(proxyUser) && !StringUtils.isEmpty(proxyPassword)) {
+            if (!StringUtils.isEmpty(proxyUser) && !StringUtils.isEmpty(gitHubSettings.getProxyPassword())) {
                 System.setProperty("http.proxyUser", proxyUser);
                 System.setProperty("https.proxyUser", proxyUser);
-                System.setProperty("http.proxyPassword", proxyPassword);
-                System.setProperty("https.proxyPassword", proxyPassword);
+                System.setProperty("http.proxyPassword", gitHubSettings.getProxyPassword());
+                System.setProperty("https.proxyPassword", gitHubSettings.getProxyPassword());
             }
         }
     }
@@ -418,7 +418,7 @@ public class GitHubCollectorTask extends CollectorTask<GitHubCollector> {
         orphanSaveList.forEach(c -> LOG.info("Updating orphan " + c.getScmRevisionNumber() + ' ' +
                 new DateTime(c.getScmCommitTimestamp()).toString("yyyy-MM-dd hh:mm:ss.SSa") + " with pull " + c.getPullNumber()));
         long start = System.currentTimeMillis();
-        commitRepository.save(orphanSaveList);
+        commitRepository.saveAll(orphanSaveList);
         LOG.info("-- Saved Orphan Commits= " + orphanSaveList.size() + ", Duration= " + (System.currentTimeMillis() - start) + " milliseconds");
     }
 
